@@ -5,6 +5,7 @@ const spawn = require('child_process').spawn;
 const os = require('os');
 const crypto = require('crypto');
 const emccCmd = process.platform === 'win32' ? 'emcc.bat' : 'emcc';
+const emarCmd = process.platform === 'win32' ? 'emar.bat' : 'emar';
 
 const exists = async function(path) {
     try {
@@ -80,18 +81,7 @@ const ignoreAndFilter = async function(list, ignoreFile) {
 };
 
 const defaultBuildFlags = [
-    // Force emscripten.h to be parsed at the top of EVERY translation unit,
-    // outside any extern "C" block. Third-party headers (e.g. mbed-client-pal
-    // pal.h) wrap their includes in `extern "C"`, which would otherwise pull
-    // em_asm.h's C++ template helpers (__em_asm_sig) in at C linkage -> clang
-    // "templates must have C++ linkage". Pre-including here sets the include
-    // guard first (correct C++ linkage), so later includes are no-ops.
     '-include', 'emscripten.h',
-    '-s', 'NO_EXIT_RUNTIME=1',
-    '-s', 'ASSERTIONS=2',
-    '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
-    '-s', 'FORCE_FILESYSTEM=1',
-
     '-D__MBED__',
     '-DTARGET_SIMULATOR',
     '-DMBED_EXCLUSIVE_ACCESS=1U',
@@ -105,7 +95,6 @@ const defaultBuildFlags = [
     '-DMBED_CONF_EVENTS_PRESENT',
     '-DMBED_CONF_NSAPI_PRESENT',
     '-DMBED_BUILD_TIMESTAMP=' + (Date.now() / 1000 | 0),
-
 
     // Pelion device management
     '-DARM_UC_USE_PAL_BLOCKDEVICE=1',
@@ -124,21 +113,22 @@ const defaultBuildFlags = [
     '-DMBED_CLIENT_USER_CONFIG_FILE="mbed_cloud_client_user_config.h"',
     '-DMBED_CLOUD_CLIENT_USER_CONFIG_FILE="mbed_cloud_client_user_config.h"',
     '-DMBED_CONF_APP_DEVELOPER_MODE=1'
-
-    // '-Wall',
 ];
 
-const emterpretifyFlags = [
-    '-s', 'EMTERPRETIFY=1',
-    '-s', 'EMTERPRETIFY_ASYNC=1',
-    '-g3'
+const asyncifyFlags = [
+    '-sASYNCIFY=1'
 ];
 
-const nonEmterpretifyFlags = [
+// Flags used for the final application link (archive + app objects -> js/wasm).
+const defaultLinkFlags = [
+    '-s', 'NO_EXIT_RUNTIME=1',
+    '-s', 'ASSERTIONS=2',
+    '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
+    '-s', 'FORCE_FILESYSTEM=1',
     '-s', 'ASYNCIFY=1',
+    '-flto',
     '-g4'
 ];
-
 // from https://stackoverflow.com/questions/31645738/how-to-create-full-path-with-nodes-fs-mkdirsync
 const mkdirpSync = function(targetDir) {
     const sep = Path.sep;
@@ -273,10 +263,11 @@ module.exports = {
     getAllCFiles: getAllCFiles,
     ignoreAndFilter: ignoreAndFilter,
     defaultBuildFlags: defaultBuildFlags,
-    emterpretifyFlags: emterpretifyFlags,
-    nonEmterpretifyFlags: nonEmterpretifyFlags,
+    defaultLinkFlags: defaultLinkFlags,
+    asyncifyFlags: asyncifyFlags,
     mkdirpSync: mkdirpSync,
     getMacrosFromMbedAppJson: getMacrosFromMbedAppJson,
     emccCmd: emccCmd,
+    emarCmd: emarCmd,
     spawnEmcc: spawnEmcc
 };

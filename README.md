@@ -201,7 +201,7 @@ After changing anything in the simulator HAL, you need to recompile the libmbed 
 1. Run:
 
     ```
-    $ rm mbed-simulator-hal/libmbed.bc
+    $ rm mbed-simulator-hal/libmbed.a
     ```
 
 1. Rebuild your application. libmbed will automatically be generated.

@@ -11,7 +11,6 @@ You can specify simulator options via a `simconfig.json` object, this is useful 
         "-std=c++11",
         "--preload-file", "sdcard@/fs"
     ],
-    "emterpretify": true,
     "ignore": [
         "./BSP_DISCO_F413ZH",
         "./F413ZH_SD_BlockDevice"
@@ -39,9 +38,9 @@ It will automatically be picked up by the simulator CLI.
 
 To use C++11 (or a different version), pass in `-c "-std=c++11"`.
 
-**Emterpretify**
+**ASYNCIFY**
 
-If you see that compilation hangs this might be due to a bug in asyncify. To switch to Emterpretify for async operations, pass in `--emterpretify`. This is f.e. used for uTensor. Note thet emterpretify is not fully supported.
+The simulator always builds with blanket ASYNCIFY (`-sASYNCIFY=1`). This is load-bearing: Mbed OS's sleep/wait APIs (e.g. `Thread::sleep_for`, `wait`) block on a condition variable. ASYNCIFY instruments those synchronous calls so control is yielded back to the browser event loop between blocking operations; without it a waiting program would deadlock the page. The legacy `--emterpretify` mode and its unsupported fastcomp flags have been removed.
 
 **Null entropy**
 

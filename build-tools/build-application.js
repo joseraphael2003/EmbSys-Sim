@@ -35,7 +35,7 @@ let findPeripherals = async function() {
     };
 };
 
-let build = async function(outFile, extraArgs, emterpretify, verbose, includeDirectories, cFiles, peripherals, componentFiles, disableTlsNullEntropy) {
+let build = async function(outFile, extraArgs, verbose, includeDirectories, cFiles, peripherals, componentFiles, disableTlsNullEntropy) {
     let componentsOutName = Path.join(Path.dirname(outFile), Path.basename(outFile) + '.components');
 
     let builtinPeripherals = await findPeripherals();
@@ -49,6 +49,13 @@ let build = async function(outFile, extraArgs, emterpretify, verbose, includeDir
         .concat(includeDirectories.map(i => '-I' + i))
         .concat(helpers.defaultBuildFlags)
         .concat(extraArgs)
+        .concat(helpers.asyncifyFlags)
+        // libmbed.a must be the last input on the link line so that wasm-ld
+        // pulls the object members that resolve the app's undefined symbols
+        // (archive member extraction happens in order, so referenced members
+        // only get pulled when the archive follows the objects that use them).
+        .concat([ libmbed.getPath() ])
+        .concat(helpers.defaultLinkFlags)
         .concat([
             '-o', outFile
         ]);
@@ -58,13 +65,6 @@ let build = async function(outFile, extraArgs, emterpretify, verbose, includeDir
             '-DMBEDTLS_TEST_NULL_ENTROPY',
             '-DMBEDTLS_NO_DEFAULT_ENTROPY_SOURCES',
         ]);
-    }
-
-    if (emterpretify) {
-        args = args.concat(helpers.emterpretifyFlags);
-    }
-    else {
-        args = args.concat(helpers.nonEmterpretifyFlags);
     }
 
     if (verbose) {
@@ -95,12 +95,12 @@ let build = async function(outFile, extraArgs, emterpretify, verbose, includeDir
     });
 }
 
-let buildDirectory = async function (inputDir, outFile, extraArgs, emterpretify, verbose) {
+let buildDirectory = async function (inputDir, outFile, extraArgs, verbose) {
     inputDir = Path.resolve(inputDir);
     outFile = Path.resolve(outFile);
 
     let includeDirectories = (await getAllDirectories(inputDir)).concat(await libmbed.getAllDirectories()).map(c => Path.resolve(c));;
-    let cFiles = [ libmbed.getPath() ].concat(await getAllCFiles(inputDir)).map(c => Path.resolve(c));
+    let cFiles = (await getAllCFiles(inputDir)).map(c => Path.resolve(c));
 
     let macros = await helpers.getMacrosFromMbedAppJson(Path.join(inputDir, 'mbed_app.json'));
 
@@ -109,10 +109,6 @@ let buildDirectory = async function (inputDir, outFile, extraArgs, emterpretify,
                         : {};
 
     simconfig['compiler-args'] = simconfig['compiler-args'] || [];
-
-    if (simconfig.emterpretify) {
-        emterpretify = true;
-    }
 
     // so... we need to remove all folders that also exist in the simulator...
     let toRemove = [
@@ -170,7 +166,6 @@ let buildDirectory = async function (inputDir, outFile, extraArgs, emterpretify,
 
     return build(outFile,
                  extraArgs,
-                 emterpretify,
                  verbose,
                  includeDirectories,
                  cFiles,
@@ -179,32 +174,32 @@ let buildDirectory = async function (inputDir, outFile, extraArgs, emterpretify,
                  simconfig.disableTlsNullEntropy);
 }
 
-let buildFile = async function(inputFile, outFile, extraArgs, emterpretify, verbose) {
+let buildFile = async function(inputFile, outFile, extraArgs, verbose) {
     inputFile = Path.resolve(inputFile);
     outFile = Path.resolve(outFile);
 
     let includeDirectories = [ Path.dirname(inputFile) ].concat(await libmbed.getAllDirectories()).map(c => Path.resolve(c));;
-    let cFiles = [ libmbed.getPath(), inputFile ].map(c => Path.resolve(c));
+    let cFiles = [ inputFile ].map(c => Path.resolve(c));
 
-    return build(outFile, extraArgs, emterpretify, verbose, includeDirectories, cFiles, [], {});
+    return build(outFile, extraArgs, verbose, includeDirectories, cFiles, [], {});
 }
 
 module.exports = {
-    _build: async function(buildFn, input, outFile, extraArgs, emterpretify, verbose) {
+    _build: async function(buildFn, input, outFile, extraArgs, verbose) {
         if (!await libmbed.exists()) {
-            console.log('libmbed.bc does not exist. Building...');
+            console.log('libmbed.a does not exist. Building...');
 
             await libmbed.build(verbose);
         }
 
-        await buildFn(input, outFile, extraArgs, emterpretify, verbose);
+        await buildFn(input, outFile, extraArgs, verbose);
     },
 
-    buildDirectory: function(inputDir, outFile, extraArgs, emterpretify, verbose) {
-        return module.exports._build(buildDirectory, inputDir, outFile, extraArgs, emterpretify, verbose);
+    buildDirectory: function(inputDir, outFile, extraArgs, verbose) {
+        return module.exports._build(buildDirectory, inputDir, outFile, extraArgs, verbose);
     },
 
-    buildFile: function(inputFile, outFile, extraArgs, emterpretify, verbose) {
-        return module.exports._build(buildFile, inputFile, outFile, extraArgs, emterpretify, verbose);
+    buildFile: function(inputFile, outFile, extraArgs, verbose) {
+        return module.exports._build(buildFile, inputFile, outFile, extraArgs, verbose);
     }
 };

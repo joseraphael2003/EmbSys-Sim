@@ -1,5 +1,6 @@
 const fs = require('fs');
 const Path = require('path');
+const os = require('os');
 const spawn = require('child_process').spawn;
 const { exists, getAllDirectories, getAllCFiles, ignoreAndFilter } = require('./helpers');
 const helpers = require('./helpers');
@@ -8,7 +9,7 @@ const commandExists = require('command-exists');
 const promisify = require('es6-promisify').promisify;
 
 const outFolder = Path.join(__dirname, '..', 'mbed-simulator-hal');
-const outFile = Path.resolve(Path.join(outFolder, 'libmbed.bc')); // should this be configurable?
+const outFile = Path.resolve(Path.join(outFolder, 'libmbed.a')); // static archive of compiled objects
 const ignoreFile = Path.join(outFolder, '.simignore');
 
 let libmbed = {
@@ -114,65 +115,116 @@ let libmbed = {
     build: async function(verbose) {
         await this.checkDependencies();
 
-        // clear cache files
-        let cacheFiles = [
-            Path.join(outFolder, 'directories.cache'),
-            Path.join(outFolder, 'cfiles.cache')
-        ];
-        await Promise.all(cacheFiles.map(async function(c) {
-            if (await(exists(c))) {
-                promisify(fs.unlink)(c);
-            }
-        }));
+        // Cache files (directories.cache, cfiles.cache) are preserved to avoid
+        // expensive recursive filesystem walks over host-mounted directories.
 
         await this.fetchDeps();
 
         let includeDirectories = await this.getAllDirectories();
         let cFiles = await this.getAllCFiles();
-        let emterpretify = false; // no need for this yet
 
-        let args = cFiles
-            .concat(includeDirectories.map(i => '-I' + i))
-            .concat(helpers.defaultBuildFlags)
-            .concat([
-                '-DMBEDTLS_TEST_NULL_ENTROPY',
-                '-DMBEDTLS_NO_DEFAULT_ENTROPY_SOURCES',
-
-                '-O2',
-                '-o', outFile
-            ]);
-
-        if (emterpretify) {
-            args = args.concat(helpers.emterpretifyFlags);
+        // Persistent folder to hold the per-TU object files for incremental caching
+        let objDir = Path.join(outFolder, '.obj');
+        if (!await exists(objDir)) {
+            await promisify(fs.mkdir)(objDir, { recursive: true });
         }
-        else {
-            args = args.concat(helpers.nonEmterpretifyFlags);
-        }
+        let objs = [];
 
-        args = args.filter(a => a !== '--emterpretify');
+        let compileOne = async function(file) {
+            let base = Path.relative(outFolder, file).replace(/[\\\/]/g, '_').replace(/\.(c|cpp)$/i, '');
+            let obj = Path.join(objDir, base + '.o');
 
-        if (verbose) {
-            console.log(helpers.emccCmd + ' ' + args.join(' '));
-            args.push('-v');
-        }
+            if (await exists(obj)) {
+                try {
+                    let fileStat = await promisify(fs.stat)(file);
+                    let objStat = await promisify(fs.stat)(obj);
+                    if (objStat.mtimeMs >= fileStat.mtimeMs && objStat.size > 0) {
+                        return obj;
+                    }
+                } catch (e) {}
+            }
 
-        let cmd = await helpers.spawnEmcc(args);
+            let args = ['-c', file, '-o', obj]
+                .concat(includeDirectories.map(i => '-I' + i))
+                .concat(helpers.defaultBuildFlags)
+                .concat([
+                    '-DMBEDTLS_TEST_NULL_ENTROPY',
+                    '-DMBEDTLS_NO_DEFAULT_ENTROPY_SOURCES',
+                    '-O2'
+                ]);
 
-        return new Promise((resolve, reject) => {
-            let stdout = '';
+            if (verbose) {
+                console.log(helpers.emccCmd + ' ' + args.join(' '));
+                args.push('-v');
+            }
 
-            cmd.stdout.on('data', data => stdout += data.toString('utf-8'));
-            cmd.stderr.on('data', data => stdout += data.toString('utf-8'));
+            let cmd = await helpers.spawnEmcc(args);
 
-            cmd.on('close', code => {
-                if (code === 0) {
-                    return resolve();
-                }
-                else {
-                    return reject('Failed to build libmbed (' + code + ')\n' + stdout);
+            await new Promise((resolve, reject) => {
+                let stdout = '';
+
+                cmd.stdout.on('data', data => stdout += data.toString('utf-8'));
+                cmd.stderr.on('data', data => stdout += data.toString('utf-8'));
+
+                cmd.on('close', code => {
+                    if (code === 0) {
+                        resolve(obj);
+                    }
+                    else {
+                        reject('Failed to compile ' + file + ' (' + code + ')\n' + stdout);
+                    }
+                });
+            });
+            return obj;
+        };
+        try {
+            let queue = cFiles.slice();
+            let concurrency = Math.min(16, Math.max(8, (os.cpus() || []).length || 8));
+            let total = cFiles.length;
+            let done = 0;
+            console.log(`Compiling ${total} HAL files with ${concurrency} parallel workers...`);
+            let workers = Array.from({ length: concurrency }, async () => {
+                while (queue.length > 0) {
+                    let file = queue.shift();
+                    if (!file) break;
+                    let obj = await compileOne(file);
+                    objs.push(obj);
+                    done++;
+                    if (done % 50 === 0 || done === total) {
+                        console.log(`Compiled ${done}/${total} HAL files...`);
+                    }
                 }
             });
-        });
+            await Promise.all(workers);
+
+            // create the static archive with emar
+            let archiveArgs = ['rcs', outFile].concat(objs);
+
+            if (verbose) {
+                console.log(helpers.emarCmd + ' ' + archiveArgs.join(' '));
+            }
+
+            let cmd = spawn(helpers.emarCmd, archiveArgs);
+
+            await new Promise((resolve, reject) => {
+                let stdout = '';
+
+                cmd.stdout.on('data', data => stdout += data.toString('utf-8'));
+                cmd.stderr.on('data', data => stdout += data.toString('utf-8'));
+
+                cmd.on('close', code => {
+                    if (code === 0) {
+                        return resolve();
+                    }
+                    else {
+                        return reject('Failed to create ' + outFile + ' (' + code + ')\n' + stdout);
+                    }
+                });
+            });
+        }
+        catch (e) {
+            throw e;
+        }
     }
 };
 
