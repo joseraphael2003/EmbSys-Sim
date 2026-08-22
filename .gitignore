@@ -1,7 +1,6 @@
 *.bc
 *.a
 *.o
-*.a
 mbed-simulator-hal/.obj/
 demos/*/out
 demos/lorawan-classc/
