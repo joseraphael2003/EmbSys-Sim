@@ -80,6 +80,13 @@ const ignoreAndFilter = async function(list, ignoreFile) {
 };
 
 const defaultBuildFlags = [
+    // Force emscripten.h to be parsed at the top of EVERY translation unit,
+    // outside any extern "C" block. Third-party headers (e.g. mbed-client-pal
+    // pal.h) wrap their includes in `extern "C"`, which would otherwise pull
+    // em_asm.h's C++ template helpers (__em_asm_sig) in at C linkage -> clang
+    // "templates must have C++ linkage". Pre-including here sets the include
+    // guard first (correct C++ linkage), so later includes are no-ops.
+    '-include', 'emscripten.h',
     '-s', 'NO_EXIT_RUNTIME=1',
     '-s', 'ASSERTIONS=2',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
