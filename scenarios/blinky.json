@@ -1,0 +1,14 @@
+{
+    "name": "blinky",
+    "timeoutMs": 10000,
+    "steps": [
+        {
+            "name": "blinky toggles the red LED via serial output",
+            "timeoutMs": 10000,
+            "assert": {
+                "type": "serial",
+                "regex": "Blink! LED is now [01]"
+            }
+        }
+    ]
+}
