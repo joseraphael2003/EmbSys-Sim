@@ -9,27 +9,38 @@
     var Module = {
         preRun: [
             function() {
-                addRunDependency('IDBFS');
-                FS.mkdir('/IDBFS');
-                FS.mount(IDBFS, {}, '/IDBFS');
+                // Upstream Emscripten builds may not include IDBFS (link with -lidbfs.js);
+                // when it is absent the runtime exposes a sentinel string, not a mountable FS.
+                // Only set up persistence when the IDBFS module is actually compiled in.
+                // (FS.syncfs exists even without IDBFS, so it cannot be used to detect it;
+                // the sentinel is a string, while a real IDBFS module is an object.)
+                if (typeof IDBFS === 'object' && IDBFS !== null) {
+                    addRunDependency('IDBFS');
+                    FS.mkdir('/IDBFS');
+                    FS.mount(IDBFS, {}, '/IDBFS');
 
-                FS.syncfs(true, function (err) {
-                    if (err) {
-                        console.error('Could not sync /IDBFS', err);
-                    }
-                    else {
-                        console.log('Synced /IDBFS');
-                    }
-                    removeRunDependency('IDBFS');
-                });
-            },
-            function() {
-                if (typeof window.onStartExecution === 'function') {
-                    window.onStartExecution();
+                    FS.syncfs(true, function (err) {
+                        if (err) {
+                            console.error('Could not sync /IDBFS', err);
+                        }
+                        else {
+                            console.log('Synced /IDBFS');
+                        }
+                        removeRunDependency('IDBFS');
+                    });
                 }
             }
         ],
         postRun: [],
+        // Upstream Emscripten invokes this once the runtime has finished initializing.
+        // With upstream (async wasm instantiation + ASYNCIFY) execution may start
+        // asynchronously, so signal start from here rather than from a synchronous
+        // preRun callback to avoid notifying before the runtime is actually ready.
+        onRuntimeInitialized: function() {
+            if (typeof window.onStartExecution === 'function') {
+                window.onStartExecution();
+            }
+        },
         print: (function () {
             return function (text) {
                 for (var ix = 0; ix < arguments.length; ix++) {

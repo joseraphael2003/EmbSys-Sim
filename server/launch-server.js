@@ -280,10 +280,6 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             maxAge = staticMaxAge;
         }
 
-        if (/\.js\.mem$/.test(req.params.script)) {
-            return res.sendFile(Path.join(outFolder, req.params.script), { maxAge: maxAge });
-        }
-
         if (/\.js\.map$/.test(req.params.script)) {
             return res.sendFile(Path.join(outFolder, req.params.script), { maxAge: maxAge });
         }
