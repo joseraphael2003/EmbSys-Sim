@@ -82,6 +82,8 @@ const ignoreAndFilter = async function(list, ignoreFile) {
 
 const defaultBuildFlags = [
     '-include', 'emscripten.h',
+    '-Wno-c++11-narrowing',
+    '-Wno-narrowing',
     '-D__MBED__',
     '-DTARGET_SIMULATOR',
     '-DMBED_EXCLUSIVE_ACCESS=1U',
@@ -127,7 +129,7 @@ const defaultLinkFlags = [
     '-s', 'FORCE_FILESYSTEM=1',
     '-s', 'ASYNCIFY=1',
     '-flto',
-    '-g4'
+    '-gsource-map'
 ];
 // from https://stackoverflow.com/questions/31645738/how-to-create-full-path-with-nodes-fs-mkdirsync
 const mkdirpSync = function(targetDir) {
