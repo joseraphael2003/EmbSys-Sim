@@ -31,6 +31,7 @@ const { spawnSync } = require('child_process');
 
 const HAL_DIR = Path.join(__dirname, '..', 'mbed-simulator-hal');
 const CACHE_FILE = Path.join(HAL_DIR, 'ran-fetch-deps.cache');
+const PATCHES_DIR = Path.join(__dirname, '..', 'patches');
 const MAX_DEPTH = 3; // nested *.lib resolution depth
 
 const ENV = Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0' });
@@ -122,6 +123,28 @@ function verifySHA(destDir, sha, label) {
     log.push(`verified ${label}: HEAD = ${head}`);
 }
 
+// Apply any patches/<name>*.patch files (falling back to all *.patch in the
+// patches/ directory) onto a freshly checked-out dependency. Only called right
+// after a fresh checkout, never on the fast no-op path where the patch is
+// already applied (git apply would fail as "patch does not apply"). A patch
+// that fails to apply aborts the fetch, which is the intended hard-fail.
+function applyPatches(destDir, depName) {
+    let patchFiles = [];
+    try {
+        patchFiles = fs.readdirSync(PATCHES_DIR).filter(f => f.endsWith('.patch'));
+    }
+    catch (e) {
+        return; // no patches/ directory -> nothing to apply
+    }
+    const prefixed = patchFiles.filter(f => f.toLowerCase().startsWith(depName.toLowerCase() + '-'));
+    const toApply = prefixed.length ? prefixed : patchFiles;
+    for (const pf of toApply) {
+        const patchFile = Path.join(PATCHES_DIR, pf);
+        log.push(`Applying patch ${pf} to ${Path.relative(HAL_DIR, destDir)}`);
+        run('git', ['-C', destDir, 'apply', patchFile]);
+    }
+}
+
 function findNestedLibs(dir, remaining) {
     let out = [];
     if (remaining < 0) return out;
@@ -165,6 +188,7 @@ function resolveLib(libFile) {
     else {
         cloneRepo(url, destDir, sha);
         verifySHA(destDir, sha, name);
+        applyPatches(destDir, name);
     }
 
     // Resolve nested libraries found inside this dependency.
