@@ -69,20 +69,20 @@ let libmbed = {
         return exists(outFile);
     },
 
-    mbedDeploy: async function() {
-        let cacheFile = Path.join(outFolder, 'ran-mbed-deploy.cache');
+    fetchDeps: async function() {
+        let cacheFile = Path.join(outFolder, 'ran-fetch-deps.cache');
 
         if (await exists(cacheFile)) {
             return;
         }
 
-        console.log(`'mbed deploy' did not run before, running...`);
+        console.log(`'fetch-deps' did not run before, running...`);
 
         return new Promise((resolve, reject) => {
 
             let stdout = '';
 
-            let cmd = spawn('mbed', [ 'deploy' ], { cwd: Path.join(__dirname, '..') });
+            let cmd = spawn(process.execPath, [ 'build-tools/fetch-deps.js' ], { cwd: Path.join(__dirname, '..') });
 
             cmd.stdout.on('data', data => stdout += data.toString('utf-8'));
             cmd.stderr.on('data', data => stdout += data.toString('utf-8'));
@@ -95,20 +95,13 @@ let libmbed = {
                     });
                 }
                 else {
-                    return reject('Failed to run `mbed deploy` (' + code + ')\n' + stdout);
+                    return reject('Failed to run `fetch-deps` (' + code + ')\n' + stdout);
                 }
             });
         });
     },
 
     checkDependencies: async function() {
-        try {
-            await commandExists('mbed');
-        }
-        catch (ex) {
-            throw 'Mbed CLI (mbed) is not installed. Follow the steps in https://github.com/armmbed/mbed-cli to continue';
-        }
-
         try {
             // there's helpers.emccCmd, but the weird thing is that we need to spawn emcc.bat on Windows, but this still works...
             await commandExists('emcc');
@@ -132,7 +125,7 @@ let libmbed = {
             }
         }));
 
-        await this.mbedDeploy();
+        await this.fetchDeps();
 
         let includeDirectories = await this.getAllDirectories();
         let cFiles = await this.getAllCFiles();
