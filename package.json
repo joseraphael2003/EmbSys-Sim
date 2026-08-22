@@ -26,6 +26,9 @@
     "url": "https://github.com/janjongboom/mbed-simulator/issues"
   },
   "homepage": "https://github.com/janjongboom/mbed-simulator#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "body-parser": "^1.18.2",
     "command-exists": "^1.2.2",
@@ -37,8 +40,8 @@
     "hbs": "^4.0.1",
     "nodemon": "^2.0.2",
     "opn": "^6.0.0",
-    "puppeteer": "^2.0.0",
-    "socket.io": "^2.1.0",
+    "puppeteer": "^23.0.0",
+    "socket.io": "^4.8.1",
     "timesync": "^1.0.2"
   }
 }

@@ -460,7 +460,7 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
 
             var data = JSON.parse(msg.slice(4).toString('utf-8'));
 
-            var buff = new Buffer(data.txpk.data, 'base64');
+            var buff = Buffer.from(data.txpk.data, 'base64');
 
             let sf = data.txpk.datr.match(/SF(\d+)/)[1];
             let bw1 = data.txpk.datr.match(/BW(\d+)/)[1];

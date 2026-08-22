@@ -6,12 +6,13 @@ const os = require('os');
 const crypto = require('crypto');
 const emccCmd = process.platform === 'win32' ? 'emcc.bat' : 'emcc';
 
-const exists = function(path) {
-    return new Promise((resolve, reject) => {
-        fs.exists(path, function(v) {
-            resolve(v);
-        });
-    });
+const exists = async function(path) {
+    try {
+        await fs.promises.access(path);
+        return true;
+    } catch (err) {
+        return false;
+    }
 };
 
 const isDirectory = async function(source) {
