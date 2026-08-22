@@ -29,6 +29,11 @@ or a native installation.
 
 ### Docker installation
 
+Docker is the **primary supported** way to run the simulator. The image is built
+on the upstream `emscripten/emsdk` base, which bundles Node.js, npm, Python 3
+and the complete Emscripten toolchain (including `emcc`), so no native toolchain
+setup is required.
+
 1. Install Docker
 1. Build the Docker image:  
     `docker compose build`
@@ -45,26 +50,25 @@ or a native installation.
 
 #### Prerequisites
 
-1. Install [Mbed CLI](https://github.com/ARMmbed/mbed-cli).
-1. Install [Python 2.7](https://www.python.org/downloads/windows/) - **not Python 3!**.
-1. Install [Git](https://git-scm.com/).
-1. Install [Mercurial](https://www.mercurial-scm.org/wiki/Download).
-1. Install [Node.js](https://nodejs.org/en/) v8 or higher.
+Native development is supported but optional (Docker is the primary
+environment). It requires:
 
-Make sure that all of these are in your PATH. Verify this by opening a command prompt or terminal, and running:
+1. Install [Node.js](https://nodejs.org/en/) v18 or higher.
+1. Install [Git](https://git-scm.com/).
+1. Install the upstream [Emscripten SDK (emsdk)](https://emscripten.org/docs/getting_started/downloads.html)
+   (provides `emcc`, `emar`, `clang` and a bundled Python 3).
+
+Make sure that these are in your PATH. Verify this by opening a command prompt or terminal, and running:
 
 ```
-$ where mbed
-C:\Python27\Scripts\mbed.exe
-
 $ where node
-C:\Program Files\nodejs2\node.exe
+C:\Program Files\nodejs\node.exe
 
 $ where git
 C:\Program Files\Git\cmd\git.exe
 
-$ where hg
-C:\Program Files\TortoiseHg\hg.exe
+$ where emcc
+C:\emsdk\upstream\emscripten\emcc
 ```
 
 On Linux and macOS use `which` instead of `where`.
@@ -73,63 +77,30 @@ If one of the `where` / `which` commands does not yield a path, the utility is n
 
 #### Installing Emscripten
 
-To install the Emscripten cross-compilation toolchain, open a command prompt and:
+To install the upstream Emscripten SDK (emsdk), open a command prompt and:
 
-1. Clone the repository and install SDK version 1.38.21:
+1. Clone the emsdk repository and install the latest stable SDK:
 
     ```
     $ git clone https://github.com/emscripten-core/emsdk.git
     $ cd emsdk
-    $ emsdk install fastcomp-clang-tag-e1.38.21-64bit
-    $ emsdk activate fastcomp-clang-tag-e1.38.21-64bit
+    $ emsdk install latest
+    $ emsdk activate latest
 
     # on Windows only:
-    $ emsdk_env.bat --global
+    $ emsdk_env.bat
+    # on macOS / Linux:
+    $ source ./emsdk_env.sh
     ```
 
 1. Verify that the installation was successful:
 
     ```
     $ emcc -v
-    emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 1.38.21
     ```
 
-1. Find the folder where emcc was installed:
-
-    **Windows**
-
-    ```
-    $ where emcc
-    C:\simulator\emsdk\emscripten\1.38.21\emcc
-    ```
-
-    **macOS and Linux**
-
-    ```
-    $ which emcc
-    ~/toolchains/emsdk/emscripten/1.38.21/emcc
-    ```
-
-1. Add this folder to your PATH.
-    * On Windows:
-        * Go to **System Properties > Advanced > Environmental variables**.
-        * Find `PATH`.
-        * Add the folder you found in the previous step, and add it prefixed by `;`. E.g.: `;C:\simulator\emsdk\emscripten\1.38.21\`
-    * On macOS / Linux:
-        * Open `~/.bash_profile` or `~/.bashrc` and add:
-
-        ```
-        PATH=$PATH:~/toolchains/emsdk/emscripten/1.38.21
-        ```
-
-1. Open a new command prompt and verify that `emcc` can still be found by running:
-
-    ```
-    $ where emcc
-    C:\simulator\emsdk\emscripten\1.38.21\emcc
-    ```
-
-1. All set!
+1. All set! Add the emsdk `emscripten` bin directory to your PATH if your shell
+   did not already pick it up (the `emsdk activate` step above usually does this).
 
 #### Installing the simulator through npm
 
