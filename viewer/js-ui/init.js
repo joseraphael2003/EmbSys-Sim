@@ -6,6 +6,53 @@
     });
     terminal.open(document.querySelector('#output'));
 
+    // Serial monitor toolbar: Clear / Download log / Copy.
+    function collectTerminalText() {
+        var buffer = terminal.buffer;
+        var lines = [];
+        for (var i = 0; i < buffer.lines.length; i++) {
+            lines.push(buffer.translateBufferLineToString(i, true));
+        }
+        return lines.join('\n');
+    }
+
+    function timestamp() {
+        var d = new Date();
+        function pad(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' +
+            pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+    }
+
+    document.getElementById('btn-clear').addEventListener('click', function () {
+        terminal.clear();
+    });
+
+    document.getElementById('btn-download-log').addEventListener('click', function () {
+        var text = collectTerminalText();
+        var blob = new Blob([text], { type: 'text/plain' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'mbed-serial-' + timestamp() + '.log';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btn-copy').addEventListener('click', function () {
+        var text = collectTerminalText();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+                Module.setStatus('Serial output copied to clipboard');
+            }, function () {
+                window.prompt('Serial output (copy manually):', text);
+            });
+        } else {
+            window.prompt('Serial output (copy manually):', text);
+        }
+    });
+
     var Module = {
         preRun: [
             function() {
