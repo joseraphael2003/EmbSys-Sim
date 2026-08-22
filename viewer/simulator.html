@@ -19,6 +19,7 @@
   </section>
 
   <section id="project">
+    <div id="share-notice" style="display:none; padding:6px 12px; font-size:12px; background:#fff8dc; border-bottom:1px solid #d8c06a;"></div>
     <section id="editor-container">
       <div id="editor-topbar">
         <select id="select-project">
@@ -32,6 +33,7 @@
 
         <div id="run-container">
           <span id="run-status"></span>
+          <button id="share">Share</button>
           <button id="run">Run</button>
         </div>
       </div>
@@ -63,5 +65,143 @@ int main() {
   <script type="text/javascript" src="/js-hal/pinnames.js"></script>
   <script type="text/javascript" src="/js-ui/ga.js"></script>
   <script type="text/javascript" src="/js-ui/editor.js"></script>
+
+  <script type="text/javascript">
+  // URL-shareable lab configurations (#lab=<base64url(JSON{code,model})>).
+  //
+  // The component model lives in the board iframe (viewer.html / viewer.js) and is
+  // persisted to same-origin sessionStorage, so the editor page round-trips it here
+  // through sessionStorage (precedence on load: #lab= > sessionStorage > default demo).
+  (function() {
+      'use strict';
+
+      var LAB_PREFIX = '#lab=';
+      var MAX_HASH_BYTES = 30 * 1024; // 30 KB oversize guard
+
+      var noticeEl = document.getElementById('share-notice');
+
+      function setNotice(msg, isError) {
+          noticeEl.textContent = msg || '';
+          noticeEl.style.display = msg ? 'block' : 'none';
+          noticeEl.style.color = isError ? '#a00' : '#7a5c00';
+      }
+
+      // RFC 4648 §5 base64url, UTF-8 safe (native btoa/atob only, no external libs)
+      function bytesToBase64Url(bytes) {
+          var bin = '';
+          for (var i = 0; i < bytes.length; i++) { bin += String.fromCharCode(bytes[i]); }
+          return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+      function base64UrlToBytes(b64) {
+          var b = b64.replace(/-/g, '+').replace(/_/g, '/');
+          while (b.length % 4) { b += '='; }
+          var bin = atob(b);
+          var bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) { bytes[i] = bin.charCodeAt(i); }
+          return bytes;
+      }
+      function utf8Encode(str) {
+          if (typeof TextEncoder !== 'undefined') { return new TextEncoder().encode(str); }
+          var unicode = unescape(encodeURIComponent(str));
+          var out = new Uint8Array(unicode.length);
+          for (var i = 0; i < unicode.length; i++) { out[i] = unicode.charCodeAt(i); }
+          return out;
+      }
+      function utf8Decode(bytes) {
+          if (typeof TextDecoder !== 'undefined') { return new TextDecoder().decode(bytes); }
+          var bin = '';
+          for (var i = 0; i < bytes.length; i++) { bin += String.fromCharCode(bytes[i]); }
+          return decodeURIComponent(escape(bin));
+      }
+
+      // Current custom component model, kept canonical in sessionStorage by viewer.js
+      function readModel() {
+          try {
+              var raw = sessionStorage.getItem('model');
+              var model = raw ? JSON.parse(raw) : [];
+              return Array.isArray(model) ? model : [];
+          } catch (ex) { return []; }
+      }
+
+      function buildLabHash(code) {
+          var payload = JSON.stringify({ code: code, model: readModel() });
+          return LAB_PREFIX + bytesToBase64Url(utf8Encode(payload));
+      }
+
+      // Returns { code, model } | { error } | null (when hash is not a #lab= link)
+      function parseLabHash(hash) {
+          if (!hash || hash.indexOf(LAB_PREFIX) !== 0) { return null; }
+          var encoded = hash.slice(LAB_PREFIX.length);
+          if (!encoded) { return { error: 'The shared configuration is empty.' }; }
+          try {
+              var json = JSON.parse(utf8Decode(base64UrlToBytes(encoded)));
+              var code = (typeof json.code === 'string') ? json.code : '';
+              var model = Array.isArray(json.model) ? json.model : null; // null/absent => demo defaults
+              return { code: code, model: model };
+          } catch (ex) {
+              console.warn('[simulator] Could not decode #lab= payload:', ex);
+              return { error: 'This shared configuration is corrupted or invalid.' };
+          }
+      }
+
+      function persistModel(model) {
+          if (model === null) {
+              sessionStorage.removeItem('model-dirty'); // keep demo default board
+              return;
+          }
+          sessionStorage.setItem('model', JSON.stringify(model));
+          sessionStorage.setItem('model-dirty', true); // board iframe applies this model
+      }
+
+      function loadLab(hash) {
+          var parsed = parseLabHash(hash);
+          if (!parsed) { return; }
+          if (parsed.error) {
+              setNotice(parsed.error + ' Showing the default demo.', true);
+              console.warn('[simulator] #lab= fallback to default demo.');
+              return;
+          }
+          editor.setValue(parsed.code);
+          editor.selection.clearSelection();
+          editor.selection.moveCursorTo(0, 0);
+          persistModel(parsed.model);
+          setNotice('', false);
+      }
+
+      loadLab(document.location.hash);
+
+      // Expose codec for testing / console round-trips.
+      window.labShare = {
+          MAX: MAX_HASH_BYTES,
+          build: buildLabHash, // (code) -> '#lab=...'
+          parse: parseLabHash, // (hash) -> {code,model}|{error}|null
+          base64Url: { encode: bytesToBase64Url, decode: base64UrlToBytes }
+      };
+
+      document.getElementById('share').onclick = function() {
+          var hash = buildLabHash(editor.getValue());
+          if (hash.length > MAX_HASH_BYTES) {
+              setNotice('Your code/model is too large to share in a URL (over 30&nbsp;KB). Shorten the code or remove components, then try again.', true);
+              return;
+          }
+          setNotice('', false);
+          var shareUrl = document.location.origin + document.location.pathname + hash;
+          try {
+              history.replaceState(null, '', shareUrl);
+          } catch (ex) {
+              document.location.hash = hash;
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(shareUrl).then(function() {
+                  setNotice('Share link copied to clipboard.', false);
+              }, function() {
+                  setNotice('Share link ready: ' + shareUrl, false);
+              });
+          } else {
+              setNotice('Share link ready: ' + shareUrl, false);
+          }
+      };
+  })();
+  </script>
 </body>
 </html>

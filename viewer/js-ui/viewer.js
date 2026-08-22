@@ -151,4 +151,26 @@ document.querySelector('#select-component').onchange = function(e) {
 
 document.querySelector('#select-component').onchange();
 
+// URL-shareable lab configurations (#lab=) support.
+// The board owns the canonical component model; the editor page round-trips it via
+// same-origin sessionStorage, so expose the model here for sharing and console use.
+window.serializeComponentsModel = function() {
+    return activeComponentModel.slice();
+};
+
+// Persist a deserialized shared model (e.g. from a #lab= URL handled by the editor
+// page) into sessionStorage so the module builder applies it on the next render.
+window.ingestLabModel = function(model) {
+    var safe = Array.isArray(model) ? model : [];
+    try {
+        sessionStorage.setItem('model', JSON.stringify(safe));
+        sessionStorage.setItem('model-dirty', true);
+        return true;
+    }
+    catch (ex) {
+        console.warn('[viewer] Could not persist shared component model', ex);
+        return false;
+    }
+};
+
 })();
