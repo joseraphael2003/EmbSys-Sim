@@ -123,9 +123,11 @@ function verifySHA(destDir, sha, label) {
     log.push(`verified ${label}: HEAD = ${head}`);
 }
 
-// Apply any patches/<name>*.patch files (falling back to all *.patch in the
-// patches/ directory) onto a freshly checked-out dependency. Only called right
-// after a fresh checkout, never on the fast no-op path where the patch is
+// Apply any patches/<name>*.patch files to a freshly checked-out dependency.
+// A patch is only ever applied when its basename is prefixed by the dependency
+// name (e.g. `mbed-os-target-simulator.patch` -> the `mbed-os` dependency), so
+// a patch for one repo is never accidentally applied to another. Only called
+// right after a fresh checkout, never on the fast no-op path where the patch is
 // already applied (git apply would fail as "patch does not apply"). A patch
 // that fails to apply aborts the fetch, which is the intended hard-fail.
 function applyPatches(destDir, depName) {
@@ -136,8 +138,7 @@ function applyPatches(destDir, depName) {
     catch (e) {
         return; // no patches/ directory -> nothing to apply
     }
-    const prefixed = patchFiles.filter(f => f.toLowerCase().startsWith(depName.toLowerCase() + '-'));
-    const toApply = prefixed.length ? prefixed : patchFiles;
+    const toApply = patchFiles.filter(f => f.toLowerCase().startsWith(depName.toLowerCase() + '-'));
     for (const pf of toApply) {
         const patchFile = Path.join(PATCHES_DIR, pf);
         log.push(`Applying patch ${pf} to ${Path.relative(HAL_DIR, destDir)}`);
