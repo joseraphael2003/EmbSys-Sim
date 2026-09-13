@@ -62,7 +62,7 @@ mbed-os/targets/TARGET_RENESAS/
 mbed-os/targets/TARGET_Realtek/
 mbed-os/targets/TARGET_STM/
 mbed-os/targets/TARGET_Silicon_Labs/
-mbed-os/targets/TARGET_SIMULATOR/features/FEATURE_COMMON_PAL/arm_hal_timer\.cpp
+targets/TARGET_SIMULATOR/features/FEATURE_COMMON_PAL/arm_hal_timer\.cpp
 mbed-os/targets/TARGET_TOSHIBA/
 mbed-os/targets/TARGET_WICED/
 mbed-os/targets/TARGET_WIZNET/
