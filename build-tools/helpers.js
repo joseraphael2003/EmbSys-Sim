@@ -59,26 +59,6 @@ const getAllCFiles = async function(source) {
     return files;
 };
 
-const ignoreAndFilter = async function(list, ignoreFile) {
-    if (!await exists(ignoreFile)) {
-        return list;
-    }
-
-    let parsed = (await promisify(fs.readFile)(ignoreFile, 'utf8')).split('\n').filter(f => !!f).map(f => f.trim());
-
-    parsed = parsed.map(l => new RegExp(l));
-
-    list = list.filter(l => {
-        // different path sep (like Windows)? Make sure to swap the characters - as the regex is linux style paths
-        if (Path.sep === '\\') {
-            l = l.replace(/\\/g, '/');
-        }
-
-        return parsed.every(p => !p.test(l));
-    });
-
-    return list;
-};
 const HAL_DIR = Path.resolve(Path.join(__dirname, '..', 'mbed-simulator-hal'));
 
 const defaultBuildFlags = [
@@ -116,6 +96,8 @@ const defaultBuildFlags = [
     '-DMBED_CONF_NSAPI_EMAC_TX_POOL_BUF_SIZE=592',
     '-DMBED_CONF_NSAPI_POOL_NUM_PACKETS=4',
     '-DMBED_CONF_NSAPI_PACKET_SIZE=592',
+    // Mbed CE drivers/mbed_lib.json5 -> macro_name MBED_CRC_TABLE_SIZE (16).
+    '-DMBED_CRC_TABLE_SIZE=16',
     '-DMBEDTLS_CONFIG_FILE=\"simulator_mbedtls_config.h\"',
     '-DMBED_CONF_PLATFORM_STDIO_CONVERT_NEWLINES=1',
     '-DMBED_CONF_MBED_TRACE_ENABLE=1',
@@ -151,17 +133,17 @@ const asyncifyFlags = [
 ];
 
 // Compile-time -I order: the simulator's own roots must come BEFORE the
-// directories discovered by walking mbed-simulator-hal/. Upstream Mbed CE
-// ships headers under the same names as the simulator adapters (e.g.
-// mbed-os/connectivity/netsocket/include/netsocket/EthernetInterface.h vs
-// easy-connect/EthernetInterface.h, per-vendor device.h files), and a walked
-// directory would otherwise win the lookup and silently change the class an
-// application links against. Passing the discovered dirs after the static
+// component include roots declared by the build graph (build-libmbed.js).
+// Upstream Mbed CE ships headers under the same names as the simulator
+// adapters (e.g. mbed-os/connectivity/netsocket/include/netsocket/EthernetInterface.h
+// vs easy-connect/EthernetInterface.h, per-vendor device.h files), and a
+// component root would otherwise win the lookup and silently change the class
+// an application links against. Passing the component dirs after the static
 // roots keeps the simulator's adapters authoritative.
-const includeFlagsFirst = function(discoveredDirs) {
+const includeFlagsFirst = function(componentDirs) {
     return defaultBuildFlags
         .filter(f => f.indexOf('-I') === 0)
-        .concat(discoveredDirs.map(d => '-I' + d));
+        .concat(componentDirs.map(d => '-I' + d));
 };
 
 // defaultBuildFlags minus its -I entries: everything that is not an include
@@ -175,6 +157,13 @@ const defaultLinkFlags = [
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
     '-s', 'FORCE_FILESYSTEM=1',
     '-s', 'ASYNCIFY=1',
+    // NOTE: viewer/js-hal/*.js call the bare `ccall(...)` global (gpio IRQ,
+    // timers, network sigio, lora downlink). emsdk 3.x only defines it when
+    // EXPORTED_RUNTIME_METHODS requests it, so today those callbacks throw
+    // `ccall is not a function` in the page. Exporting it here activates the
+    // sigio path, which nested-unwinds Asyncify while the app sleeps and
+    // deadlocks (see T3: "Asyncify re-entry guard"); the export therefore
+    // belongs with T3's queued-dispatch work, not with a link-flag change.
     '-flto',
     '-gsource-map'
 ];
@@ -310,7 +299,6 @@ module.exports = {
     getCFiles: getCFiles,
     getAllDirectories: getAllDirectories,
     getAllCFiles: getAllCFiles,
-    ignoreAndFilter: ignoreAndFilter,
     defaultBuildFlags: defaultBuildFlags,
     includeFlagsFirst: includeFlagsFirst,
     nonIncludeBuildFlags: nonIncludeBuildFlags,

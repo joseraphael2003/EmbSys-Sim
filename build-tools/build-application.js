@@ -8,7 +8,7 @@ const promisify = require('es6-promisify').promisify;
 
 // gets all peripherals from mbed-simulator-hal and then returns the JS files to be loaded
 let findPeripherals = async function() {
-    let dirs  = await libmbed.getAllDirectories();
+    let dirs  = await libmbed.getIncludeDirectories();
 
     let hal = [];
     let ui = [];
@@ -99,7 +99,7 @@ let buildDirectory = async function (inputDir, outFile, extraArgs, verbose) {
     inputDir = Path.resolve(inputDir);
     outFile = Path.resolve(outFile);
 
-    let includeDirectories = (await getAllDirectories(inputDir)).concat(await libmbed.getAllDirectories()).map(c => Path.resolve(c));;
+    let includeDirectories = (await getAllDirectories(inputDir)).concat(await libmbed.getIncludeDirectories()).map(c => Path.resolve(c));;
     let cFiles = (await getAllCFiles(inputDir)).map(c => Path.resolve(c));
 
     let macros = await helpers.getMacrosFromMbedAppJson(Path.join(inputDir, 'mbed_app.json'));
@@ -178,7 +178,7 @@ let buildFile = async function(inputFile, outFile, extraArgs, verbose) {
     inputFile = Path.resolve(inputFile);
     outFile = Path.resolve(outFile);
 
-    let includeDirectories = [ Path.dirname(inputFile) ].concat(await libmbed.getAllDirectories()).map(c => Path.resolve(c));;
+    let includeDirectories = [ Path.dirname(inputFile) ].concat(await libmbed.getIncludeDirectories()).map(c => Path.resolve(c));;
     let cFiles = [ inputFile ].map(c => Path.resolve(c));
 
     return build(outFile, extraArgs, verbose, includeDirectories, cFiles, [], {});
