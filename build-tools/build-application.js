@@ -46,8 +46,8 @@ let build = async function(outFile, extraArgs, verbose, includeDirectories, cFil
     };
 
     let args = cFiles
-        .concat(includeDirectories.map(i => '-I' + i))
-        .concat(helpers.defaultBuildFlags)
+        .concat(helpers.includeFlagsFirst(includeDirectories))
+        .concat(helpers.nonIncludeBuildFlags)
         .concat(extraArgs)
         .concat(helpers.asyncifyFlags)
         // libmbed.a must be the last input on the link line so that wasm-ld

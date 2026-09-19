@@ -32,8 +32,8 @@ NetworkInterface* easy_connect(bool log_messages) {
         }
         return NULL;
     }
-    const char *ip_addr  = network_interface->get_ip_address();
-    if (ip_addr == NULL) {
+    SocketAddress ip_addr;
+    if (network_interface->get_ip_address(&ip_addr) != NSAPI_ERROR_OK) {
         if (log_messages) {
             printf("[EasyConnect] ERROR - No IP address\n");
         }
@@ -41,7 +41,7 @@ NetworkInterface* easy_connect(bool log_messages) {
     }
 
     if (log_messages) {
-        printf("[EasyConnect] IP address %s\n", ip_addr);
+        printf("[EasyConnect] IP address %s\n", ip_addr.get_ip_address());
     }
 
     return network_interface;

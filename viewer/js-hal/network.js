@@ -178,7 +178,9 @@ window.MbedJSHal.network = (function() {
      * @param {*} port
      */
     Network.prototype.socket_connect = function(id, hostname, port) {
-        hostname = Pointer_stringify(hostname);
+        // Emscripten 3.x dropped Pointer_stringify; UTF8ToString is the
+        // same read-a-NUL-terminated-UTF8-string-from-heap helper.
+        hostname = UTF8ToString(hostname);
 
         log('socket_connect', id, hostname, port);
         var x = new XMLHttpRequest();

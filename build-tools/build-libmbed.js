@@ -46,7 +46,42 @@ let libmbed = {
 
         dirs = dirs.filter(d => dirsToRemove.indexOf(d) === -1);
 
+        // platform/cxxsupport holds the extensionless mstd_* compatibility
+        // headers (mstd_cstddef etc.). The header-dir filter above drops
+        // extensionless files, so add the directory explicitly.
+        const cxxsupport = Path.join(outFolder, 'mbed-os', 'platform', 'cxxsupport');
+        if (!dirs.includes(cxxsupport)) {
+            dirs.push(cxxsupport);
+        }
+        // connectivity/libraries/nanostack-libservice provides ip4string.h /
+        // ip6string.h used by netsocket sources; its dir also fails the
+        // header-dir filter (extensionless deps elsewhere). Add explicitly.
+        const libservice = Path.join(outFolder, 'mbed-os', 'connectivity', 'libraries', 'nanostack-libservice', 'mbed-client-libservice');
+        // platform/source and netsocket/include are included with paths
+        // relative to their parents (platform/source/mbed_crash_data_offsets.h,
+        // netsocket/... from netsocket.h style includes), so the parents must
+        // be on the -I path for quoted includes from those subtrees.
+        const mbedPlatform = Path.join(outFolder, 'mbed-os', 'platform');
+        if (!dirs.includes(mbedPlatform)) {
+            dirs.push(mbedPlatform);
+        }
+        const netsocketInclude = Path.join(outFolder, 'mbed-os', 'connectivity', 'netsocket', 'include');
+        if (!dirs.includes(netsocketInclude)) {
+            dirs.push(netsocketInclude);
+        }
+        const cmsisDeviceInclude = Path.join(outFolder, 'mbed-os', 'cmsis', 'device', 'rtos', 'include');
+        if (!dirs.includes(cmsisDeviceInclude)) {
+            dirs.push(cmsisDeviceInclude);
+        }
+        if (!dirs.includes(libservice)) {
+            dirs.push(libservice);
+        }
+
+        // Mirror the cfiles.cache behaviour: this walk is the most expensive
+        // part of a build over host-mounted trees, so persist it. Delete the
+        // cache (like cfiles.cache) whenever .simignore changes.
         await promisify(fs.writeFile)(cacheFile, JSON.stringify(dirs), 'utf-8');
+
         return dirs;
     },
 
@@ -145,8 +180,8 @@ let libmbed = {
             }
 
             let args = ['-c', file, '-o', obj]
-                .concat(includeDirectories.map(i => '-I' + i))
-                .concat(helpers.defaultBuildFlags)
+                .concat(helpers.includeFlagsFirst(includeDirectories))
+                .concat(helpers.nonIncludeBuildFlags)
                 .concat([
                     '-DMBEDTLS_TEST_NULL_ENTROPY',
                     '-DMBEDTLS_NO_DEFAULT_ENTROPY_SOURCES',
@@ -179,7 +214,7 @@ let libmbed = {
         };
         try {
             let queue = cFiles.slice();
-            let concurrency = Math.min(16, Math.max(8, (os.cpus() || []).length || 8));
+            let concurrency = process.env.CONCURRENCY ? parseInt(process.env.CONCURRENCY, 10) : Math.min(3, Math.max(1, (os.cpus() || []).length || 2));
             let total = cFiles.length;
             let done = 0;
             console.log(`Compiling ${total} HAL files with ${concurrency} parallel workers...`);

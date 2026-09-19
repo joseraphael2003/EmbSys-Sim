@@ -133,23 +133,28 @@ function loadScenario(file) {
     return scenario;
 }
 
-function scenarioExit(passed, failedStep, detail, durationMs) {
+function scenarioExit(passed, failedStep, detail, durationMs, serial) {
     const report = { passed: !!passed };
     if (typeof durationMs === 'number') report.durationMs = durationMs;
     if (!passed) {
         report.failedStep = failedStep;
         report.detail = detail;
     }
+    // The application's serial stream is the evidence a scenario asserts on, so
+    // report its tail with every outcome (capped to keep the JSON readable).
+    if (serial) {
+        report.serial = String(serial).slice(-4000);
+    }
     (passed ? process.stdout : process.stderr).write(JSON.stringify(report) + '\n');
     process.exit(passed ? 0 : 1);
 }
 
 // Close the browser (best-effort) then print the machine-readable result and exit.
-async function finishHeadless(browser, passed, failedStep, detail, durationMs) {
+async function finishHeadless(browser, passed, failedStep, detail, durationMs, serialLines) {
     if (browser) {
         try { await browser.close(); } catch (e) { /* best effort */ }
     }
-    scenarioExit(passed, failedStep, detail, durationMs);
+    scenarioExit(passed, failedStep, detail, durationMs, serialLines && serialLines.join(''));
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -285,22 +290,22 @@ async function runScenario(page, browser, scenario, startTs, failures, serialLin
     while (Date.now() - overallStart < scenario.timeoutMs) {
         if (startTs.value !== null) break;
         if (failures.value !== null) {
-            await finishHeadless(browser, false, null, `Execution failed: ${failures.value}`, Date.now() - overallStart);
+            await finishHeadless(browser, false, null, `Execution failed: ${failures.value}`, Date.now() - overallStart, serialLines);
         }
         await sleep(50);
     }
     if (startTs.value === null) {
-        await finishHeadless(browser, false, null, `Timed out waiting for execution to start (${scenario.timeoutMs}ms)`, Date.now() - overallStart);
+        await finishHeadless(browser, false, null, `Timed out waiting for execution to start (${scenario.timeoutMs}ms)`, Date.now() - overallStart, serialLines);
     }
 
     for (let i = 0; i < scenario.steps.length; i++) {
         const step = scenario.steps[i];
         const res = await runScenarioStep(page, step, scenario, failures, serialLines);
         if (!res.passed) {
-            await finishHeadless(browser, false, step.name || `step-${i + 1}`, res.detail, Date.now() - startTs.value);
+            await finishHeadless(browser, false, step.name || `step-${i + 1}`, res.detail, Date.now() - startTs.value, serialLines);
         }
     }
-    await finishHeadless(browser, true, null, null, Date.now() - startTs.value);
+    await finishHeadless(browser, true, null, null, Date.now() - startTs.value, serialLines);
 }
 
 // Default headless mode (no --scenario): wait for the app to start within 30s,

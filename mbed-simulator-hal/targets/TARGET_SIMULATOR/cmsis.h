@@ -20,6 +20,26 @@
 
 #include <stdint.h>
 
+// TARGET_SIMULATOR: the CMSIS-ACLE __rbit intrinsic does not exist for wasm.
+// Provide a portable software bit-reversal so MbedCRC (and any other ACLE
+// consumer) compiles. Identical semantics to the ARM RBIT instruction.
+#ifndef __RBIT
+static inline uint32_t __sim_rbit(uint32_t v) {
+    v = ((v & 0x55555555u) << 1) | ((v >> 1) & 0x55555555u);
+    v = ((v & 0x33333333u) << 2) | ((v >> 2) & 0x33333333u);
+    v = ((v & 0x0F0F0F0Fu) << 4) | ((v >> 4) & 0x0F0F0F0Fu);
+    return __builtin_bswap32(v);
+}
+#define __RBIT(value) __sim_rbit((uint32_t)(value))
+#endif
+
+// TARGET_SIMULATOR: the CMSIS-ACLE __rbit intrinsic does not exist for wasm.
+// Provide a portable software bit-reversal so MbedCRC and any other ACLE
+// consumers compile. Equal semantics to the ARM RBIT instruction.
+#ifndef __RBIT
+#define __RBIT(value) __builtin_bswap32(__bitrev32_step(__bitrev32_step(__bitrev32_step((uint32_t)(value), 16), 8), 4))
+#endif
+
 void NVIC_SystemReset ();
 
 void __enable_irq ();

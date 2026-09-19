@@ -1,0 +1,7 @@
+{
+  "name": "test-slice",
+  "compiler-args": [
+    "-include",
+    "mbed-target-config.h"
+  ]
+}

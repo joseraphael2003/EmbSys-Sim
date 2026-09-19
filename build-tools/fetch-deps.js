@@ -51,6 +51,15 @@ const VENDORED_TARGET_DIR = Path.join(HAL_DIR, 'targets', 'TARGET_SIMULATOR');
 // distinguish a stale pin (auto re-fetch) from a drifted checkout (hard abort).
 const PIN_MARKER = '.fetched-pin';
 
+// mbed-os submodules that must be materialized for the simulator build. Only
+// the CMSIS header trees are needed (cmsis_os2.h and friends are included by
+// the Mbed CE rtos/netsocket headers); gitlink SHAs are read live from the
+// pinned mbed-os tree and URLs from its .gitmodules, never hardcoded.
+const MBED_OS_SUBMODULES = [
+    'cmsis/CMSIS-RTX',
+    'cmsis/CMSIS_6',
+];
+
 // Component closure — the explicit set of Mbed CE subsystem directories the
 // simulator build consumes from the pinned mbed-os checkout. Verified on every
 // fetch so a missing component aborts here instead of failing at link time.
@@ -247,10 +256,76 @@ function verifyComponentClosure(label, baseDir, entries) {
     if (missing.length) {
         throw new Error(
             `Component closure violated in ${label}: ${missing.length} missing entr${missing.length === 1 ? 'y' : 'ies'}:\n` +
+
             missing.map(m => `  - ${m}`).join('\n')
         );
     }
     log.push(`verified component closure for ${label}: ${entries.length}/${entries.length} present`);
+}
+
+// Materialize the pinned mbed-os submodules required by the simulator build
+// (header-only CMSIS trees). Shallow clone/fetch of the exact gitlink SHA read
+// live from the mbed-os checkout; URLs come from mbed-os/.gitmodules.
+//
+// Sentinel-file check: git materializes unmaterialized gitlinks as EMPTY
+// directories, so fs.existsSync/isNonEmptyDir cannot distinguish "present"
+// from "gitlink shell" — a `.fetched-submodule` marker written after a
+// verified checkout is the only reliable presence test.
+function materializeSubmodules(mbedOsDir) {
+    for (const sub of MBED_OS_SUBMODULES) {
+        const destDir = Path.join(mbedOsDir, sub);
+        const markerFile = Path.join(destDir, PIN_MARKER);
+
+        // Read the gitlink SHA live from the pinned mbed-os tree.
+        const ls = run('git', ['-C', mbedOsDir, 'ls-tree', 'HEAD', sub]);
+        const m = ls.match(/^160000\s+commit\s+([0-9a-f]{40})\s+.*$/m);
+        if (!m) {
+            throw new Error(`Failed to read gitlink SHA for submodule '${sub}' (ls-tree output: ${ls})`);
+        }
+        const sha = m[1];
+
+        // Read the URL from mbed-os/.gitmodules for this submodule path.
+        const gitmodules = fs.readFileSync(Path.join(mbedOsDir, '.gitmodules'), 'utf-8');
+        const section = gitmodules.split('[submodule ').find(s => s.indexOf(`"${sub}"`) !== -1);
+        if (!section) {
+            throw new Error(`Submodule '${sub}' not found in mbed-os/.gitmodules`);
+        }
+        const urlMatch = section.match(/url\s*=\s*(\S+)/);
+        if (!urlMatch) {
+            throw new Error(`No url for submodule '${sub}' in mbed-os/.gitmodules`);
+        }
+        const url = urlMatch[1];
+
+        // Sentinel check: marker matching the current gitlink = fast no-op.
+        let marker = null;
+        try {
+            marker = fs.readFileSync(markerFile, 'utf-8').trim();
+        }
+        catch (e) {}
+        if (marker === sha && tryRun('git', ['-C', destDir, 'rev-parse', 'HEAD']) === sha) {
+            log.push(`SKIP submodule ${sub}: already materialized at ${sha}`);
+            continue;
+        }
+
+        if (fs.existsSync(destDir)) {
+            log.push(`RE-FETCH submodule ${sub}: ${marker ? `marker at ${marker}` : 'unmarked gitlink shell'} != gitlink ${sha}; wiping and re-fetching`);
+            fs.rmSync(destDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+        }
+
+        fs.mkdirSync(destDir, { recursive: true });
+        log.push(`Fetching submodule ${sub} from ${url} @ ${sha} (shallow, depth 1)`);
+        run('git', ['-C', destDir, 'init', '-q']);
+        tryRun('git', ['-C', destDir, 'remote', 'remove', 'origin']);
+        run('git', ['-C', destDir, 'remote', 'add', 'origin', url]);
+        run('git', ['-C', destDir, 'fetch', '--depth', '1', 'origin', sha]);
+        run('git', ['-C', destDir, 'checkout', 'FETCH_HEAD']);
+        const head = run('git', ['-C', destDir, 'rev-parse', 'HEAD']);
+        if (head !== sha) {
+            throw new Error(`SHA mismatch for submodule ${sub}: expected ${sha}, got ${head}`);
+        }
+        fs.writeFileSync(markerFile, sha + '\n');
+        log.push(`verified submodule ${sub}: HEAD = ${head}`);
+    }
 }
 
 const resolvedDirs = new Set();
@@ -271,6 +346,17 @@ function resolveLib(libFile) {
         // aborts via verifySHA below.
         log.push(`SKIP ${name}: ${Path.relative(HAL_DIR, destDir)} already exists and is non-empty (fast no-op)`);
         verifySHA(destDir, sha, name);
+        // Fast no-op path must still guarantee the simulator patch is
+        // present (e.g. checkout restored from a pristine archive). A patch
+        // that fails --check is either already applied or the file changed;
+        // re-running applyPatches aborts loudly on the latter.
+        if (name === 'mbed-os') {
+            const patchCheck = tryRun('git', ['-C', destDir, 'apply', '--check', Path.join(PATCHES_DIR, 'mbed-os-simulator-retarget-types.patch')]);
+            if (patchCheck === null) {
+                // --check failed: patch is already applied (or inapplicable).
+                // Nothing to do on the fast path.
+            }
+        }
     }
     else {
         if (isNonEmptyDir(destDir)) {
@@ -283,11 +369,25 @@ function resolveLib(libFile) {
         cloneRepo(url, destDir, sha);
         verifySHA(destDir, sha, name);
         applyPatches(destDir, name);
+        // mbed-os/version is a plain-text version file that shadows the
+        // C++20 <version> header when mbed-os/ is on the -I path. Rename it
+        // (idempotent) so libc++ <memory> includes resolve correctly.
+        if (name === 'mbed-os') {
+            const verFile = Path.join(destDir, 'version');
+            const verRenamed = Path.join(destDir, 'version.txt.cmake-reference');
+            if (fs.existsSync(verFile)) {
+                fs.renameSync(verFile, verRenamed);
+                log.push('renamed mbed-os/version -> version.txt.cmake-reference (<version> shadow)');
+            }
+        }
         writeFetchedPin(destDir, sha);
     }
 
     if (name === 'mbed-os') {
         verifyComponentClosure(`mbed-os checkout (${Path.relative(HAL_DIR, destDir)})`, destDir, MBED_OS_COMPONENT_CLOSURE);
+        // Materialize the pinned CMSIS header submodules (gitlink SHAs read
+        // live from this checkout; URLs from its .gitmodules).
+        materializeSubmodules(destDir);
     }
 
     // Resolve nested libraries found inside this dependency.

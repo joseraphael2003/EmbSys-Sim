@@ -1,0 +1,44 @@
+diff --git a/platform/include/platform/mbed_retarget.h b/platform/include/platform/mbed_retarget.h
+index c9fb6811..f7dd7215 100644
+--- a/platform/include/platform/mbed_retarget.h
++++ b/platform/include/platform/mbed_retarget.h
+@@ -48,11 +48,22 @@
+ #  endif
+ #endif
+ 
++/* TARGET_SIMULATOR (Emscripten): the host C library already provides these
++ * standard types via <sys/types.h>/<sys/stat.h>. Skip the embedded-toolchain
++ * redefinitions to avoid conflicting typedefs (e.g. ssize_t). */
++#if defined(TARGET_SIMULATOR)
++#define MBED_SIM_STD_TYPES_PROVIDED 1
++#else
++#define MBED_SIM_STD_TYPES_PROVIDED 0
++#endif
++
++#if !MBED_SIM_STD_TYPES_PROVIDED
+ /* We can get the following standard types from sys/types for gcc, but we
+  * need to define the types ourselves for the other compilers that normally
+  * target embedded systems */
+ typedef signed   int  ssize_t;  ///< Signed size type, usually encodes negative errors
+ typedef signed   long off_t;    ///< Offset in a data stream
++#endif // !MBED_SIM_STD_TYPES_PROVIDED
+ typedef unsigned int  nfds_t;   ///< Number of file descriptors
+ typedef unsigned long long fsblkcnt_t;  ///< Count of file system blocks
+ #if defined(__ARMCC_VERSION) || !defined(__GNUC__)
+@@ -680,6 +691,7 @@ struct stat {
+ 
+ #endif
+ 
++#if !MBED_SIM_STD_TYPES_PROVIDED
+ struct statvfs {
+     unsigned long  f_bsize;    ///< Filesystem block size
+     unsigned long  f_frsize;   ///< Fragment size (block size)
+@@ -691,7 +703,7 @@ struct statvfs {
+     unsigned long  f_fsid;     ///< Filesystem ID
+ 
+     unsigned long  f_namemax;  ///< Maximum filename length
+-};
++#endif // !MBED_SIM_STD_TYPES_PROVIDED
+ 
+ /* The following are dirent.h definitions are declared here to guarantee
+  * consistency where structure may be different with different toolchains

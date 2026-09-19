@@ -22,21 +22,22 @@
 static gpio_irq_handler irq_handler;
 
 EMSCRIPTEN_KEEPALIVE
-void handle_interrupt_in(uint32_t id, gpio_irq_event event) {
-    irq_handler(id, event);
+void handle_interrupt_in(uintptr_t context, gpio_irq_event event) {
+    irq_handler(context, event);
 }
 
-int gpio_irq_init(gpio_irq_t *obj, PinName pin, gpio_irq_handler handler, uint32_t id) {
+int gpio_irq_init(gpio_irq_t *obj, PinName pin, gpio_irq_handler handler, uintptr_t context) {
     if (pin == NC) return -1;
 
     irq_handler = handler;
 
     obj->port = pin;
     obj->pin = pin;
+    obj->id = (uint32_t) context;
 
     EM_ASM_({
         MbedJSHal.gpio.irq_init($0, $1);
-    }, id, obj->pin);
+    }, obj->id, obj->pin);
 
     return 0;
 }

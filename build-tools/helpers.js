@@ -79,14 +79,43 @@ const ignoreAndFilter = async function(list, ignoreFile) {
 
     return list;
 };
+const HAL_DIR = Path.resolve(Path.join(__dirname, '..', 'mbed-simulator-hal'));
 
 const defaultBuildFlags = [
+    '-I' + Path.join(HAL_DIR, 'targets', 'TARGET_SIMULATOR'),
+    '-I' + Path.join(HAL_DIR, 'easy-connect'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'platform', 'include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'platform', 'include', 'platform'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'platform', 'cxxsupport'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'drivers', 'include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'events', 'include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'connectivity', 'netsocket', 'include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'connectivity', 'netsocket', 'include', 'netsocket'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'hal', 'include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'rtos', 'include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'cmsis', 'CMSIS_6', 'CMSIS', 'RTOS2', 'Include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'cmsis', 'CMSIS-RTX', 'Include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'cmsis', 'device', 'rtos', 'include', 'RTX'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'cmsis', 'device', 'rtos', 'include'),
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'cmsis', 'device', 'rtos', 'include', 'RTX', 'RTX_overrides'),
+    '-include', Path.join(HAL_DIR, 'targets', 'TARGET_SIMULATOR', 'mbed-target-config.h'),
+    '-Wno-macro-redefined',
     '-include', 'emscripten.h',
+    '-DMBED_CONF_NSAPI_DNS_ADDRESSES_LIMIT=10',
     '-Wno-c++11-narrowing',
     '-Wno-narrowing',
     '-D__MBED__',
     '-DTARGET_SIMULATOR',
-    '-DMBED_EXCLUSIVE_ACCESS=1U',
+    '-DMBED_EXCLUSIVE_ACCESS=0U',
+    '-DMBED_CONF_RTOS_API_PRESENT=1',
+    '-DMBED_CONF_NSAPI_DNS_CACHE_SIZE=3',
+    '-DMBED_CONF_NSAPI_EMAC_RX_POOL_NUM_BUFS=8',
+    '-DMBED_CONF_NSAPI_EMAC_TX_POOL_NUM_BUFS=8',
+    '-DMBED_CONF_NSAPI_EMAC_RX_POOL_BUF_SIZE=592',
+    '-DMBED_CONF_NSAPI_EMAC_TX_POOL_BUF_SIZE=592',
+    '-DMBED_CONF_NSAPI_POOL_NUM_PACKETS=4',
+    '-DMBED_CONF_NSAPI_PACKET_SIZE=592',
     '-DMBEDTLS_CONFIG_FILE=\"simulator_mbedtls_config.h\"',
     '-DMBED_CONF_PLATFORM_STDIO_CONVERT_NEWLINES=1',
     '-DMBED_CONF_MBED_TRACE_ENABLE=1',
@@ -120,6 +149,24 @@ const defaultBuildFlags = [
 const asyncifyFlags = [
     '-sASYNCIFY=1'
 ];
+
+// Compile-time -I order: the simulator's own roots must come BEFORE the
+// directories discovered by walking mbed-simulator-hal/. Upstream Mbed CE
+// ships headers under the same names as the simulator adapters (e.g.
+// mbed-os/connectivity/netsocket/include/netsocket/EthernetInterface.h vs
+// easy-connect/EthernetInterface.h, per-vendor device.h files), and a walked
+// directory would otherwise win the lookup and silently change the class an
+// application links against. Passing the discovered dirs after the static
+// roots keeps the simulator's adapters authoritative.
+const includeFlagsFirst = function(discoveredDirs) {
+    return defaultBuildFlags
+        .filter(f => f.indexOf('-I') === 0)
+        .concat(discoveredDirs.map(d => '-I' + d));
+};
+
+// defaultBuildFlags minus its -I entries: everything that is not an include
+// search path (-D defines, -include forced headers, -W warnings).
+const nonIncludeBuildFlags = defaultBuildFlags.filter(f => f.indexOf('-I') !== 0);
 
 // Flags used for the final application link (archive + app objects -> js/wasm).
 const defaultLinkFlags = [
@@ -265,6 +312,8 @@ module.exports = {
     getAllCFiles: getAllCFiles,
     ignoreAndFilter: ignoreAndFilter,
     defaultBuildFlags: defaultBuildFlags,
+    includeFlagsFirst: includeFlagsFirst,
+    nonIncludeBuildFlags: nonIncludeBuildFlags,
     defaultLinkFlags: defaultLinkFlags,
     asyncifyFlags: asyncifyFlags,
     mkdirpSync: mkdirpSync,

@@ -161,15 +161,17 @@
 #define MBED_CONF_PLATFORM_ERROR_DECODE_HTTP_URL_STR   "\nFor more info, visit: https://armmbed.github.io/mbedos-error/?error=0x%08X"
 #endif
 
-// Device features
-
+// Device features — the virtual board exposes only what the JS HAL models.
+// FLASH/RTC/ANALOG/PWM have no backing hardware here; CE headers compile their
+// drivers out when these are 0 (matching .simignore excludes). InterruptIn is
+// backed: viewer/js-hal/gpio.js calls the vendored gpio_irq_api.c bridge.
 #define DEVICE_INTERRUPTIN    1
-#define DEVICE_ANALOGIN       1
-#define DEVICE_ANALOGOUT      1
-#define DEVICE_PWMOUT         1
+#define DEVICE_ANALOGIN       0
+#define DEVICE_ANALOGOUT      0
+#define DEVICE_PWMOUT         0
 #define DEVICE_SERIAL         1
-#define DEVICE_FLASH          1
+#define DEVICE_FLASH          0
 #define DEVICE_EMAC           1
-#define DEVICE_RTC            1
+#define DEVICE_RTC            0
 
 #endif  // __SIMULATOR_DEVICE_H__
