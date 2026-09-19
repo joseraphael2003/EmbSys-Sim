@@ -119,33 +119,106 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
     let sockets = {};
     let socketIx = 0;
 
+    // Relay state machine (T3).
+    //
+    // A relay socket is an opaque byte pipe: payloads are never inspected,
+    // parsed or re-encoded on their way through, so binary content (0x00
+    // included) survives exactly. Every socket reports at most one terminal
+    // event, and data always precedes it:
+    //   socket-data-<id>   raw bytes
+    //   socket-eof-<id>    peer shut the connection down orderly (TCP FIN)
+    //   socket-error-<id>  connection lost, reset or local failure
+    //
+    // NSAPI_ERROR_WOULD_BLOCK (-3001) never originates here: it is the client's
+    // verdict for "no bytes buffered yet, connection still open".
+
+    /**
+     * Deliver the single terminal event of a relay socket. Later events are
+     * swallowed on purpose: an 'end' is always followed by 'close' and an error
+     * by a 'close', so without this the application would observe an error after
+     * a clean EOF.
+     */
+    function notifyTerminal(id, kind) {
+        let s = sockets[id];
+        if (!s || s.terminalSent) return;
+
+        s.terminalSent = true;
+
+        let subscribers = s.subscribers;
+        s.subscribers = [];
+        subscribers.forEach(ws => ws.emit('socket-' + kind + '-' + id));
+    }
+
+    /**
+     * Release a relay socket and every listener it holds: called when the
+     * application closes it, when it fails, and when the browser tab that owned
+     * it goes away (a relay id never leaves its tab, so such a socket can never
+     * be used again).
+     */
+    function destroyRelaySocket(id) {
+        let s = sockets[id];
+        if (!s) return;
+
+        delete sockets[id];
+
+        // Drop the subscribers first so a destroy cannot notify them, then
+        // detach the listeners so the destroy cannot re-enter this path.
+        s.subscribers = [];
+
+        try {
+            s.removeAllListeners();
+        }
+        catch (ex) {}
+
+        try {
+            if (s instanceof net.Socket) {
+                s.destroy();
+            }
+            else {
+                s.close();
+            }
+        }
+        catch (ex) {}
+    }
+
     app.post('/api/network/socket_open/tcp', (req, res, next) => {
-        let s = sockets[++socketIx] = new net.Socket();
+        // allowHalfOpen: a peer FIN ends the readable side only; the socket
+        // stays writable until the application closes it, which is what makes
+        // "orderly EOF" distinguishable from "connection terminated".
+        let s = sockets[++socketIx] = new net.Socket({ allowHalfOpen: true });
         consoleLog('Opening new TCP socket (' + socketIx + ')');
         s.subscribers = [];
+        s.owner = null;
+        s.terminalSent = false;
         res.send(socketIx + '');
 
         let cIx = socketIx;
 
         s.on('data', data => {
-            consoleLog('Received TCP packet on socket', cIx, data, 'subcount', s.subscribers.length);
+            consoleLog('Received TCP packet on socket', cIx, data.length, 'bytes', 'subcount', s.subscribers.length);
 
+            // Raw Buffer over the wire: string conversions would corrupt or
+            // truncate binary payloads (e.g. embedded 0x00 bytes).
             s.subscribers.forEach(ws => {
-                ws.emit('socket-data-' + cIx, JSON.stringify(Array.from(data)));
+                ws.emit('socket-data-' + cIx, data);
             });
         });
+        s.on('end', () => {
+            consoleLog('TCP socket', cIx, 'shut down by peer (EOF)');
+            notifyTerminal(cIx, 'eof');
+        });
         s.on('error', e => {
-            consoleLog('TCP error on socket', socketIx, e);
+            consoleLog('TCP error on socket', cIx, e.message);
 
-            s.subscribers.forEach(ws => {
-                ws.emit('socket-error-' + cIx);
-            });
-
-            try {
-                s.close();
-            }
-            catch (ex) {}
-            delete sockets[cIx];
+            notifyTerminal(cIx, 'error');
+            destroyRelaySocket(cIx);
+        });
+        s.on('close', () => {
+            // Reached without a preceding 'end' when the connection was
+            // terminated abruptly (reset, peer abort). A socket the application
+            // closed itself is already gone from this map.
+            notifyTerminal(cIx, 'error');
+            destroyRelaySocket(cIx);
         });
     });
 
@@ -153,16 +226,24 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
         let s = sockets[++socketIx] = dgram.createSocket('udp4');
         consoleLog('Opening new UDP socket (' + socketIx + ')');
         s.subscribers = [];
+        s.owner = null;
+        s.terminalSent = false;
         res.send(socketIx + '');
 
         let cIx = socketIx;
 
         s.on('message', (data, rinfo) => {
-            consoleLog('Received UDP packet on socket', cIx, data, rinfo);
+            consoleLog('Received UDP packet on socket', cIx, data.length, 'bytes', rinfo);
 
             s.subscribers.forEach(ws => {
-                ws.emit('socket-data-' + cIx, JSON.stringify(Array.from(data)));
+                ws.emit('socket-data-' + cIx, data);
             });
+        });
+        s.on('error', e => {
+            consoleLog('UDP error on socket', cIx, e.message);
+
+            notifyTerminal(cIx, 'error');
+            destroyRelaySocket(cIx);
         });
     });
 
@@ -173,29 +254,22 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             return res.send('' + NSAPI_ERROR_NO_SOCKET);
         }
 
-        let s = sockets[req.body.id];
-
-        if (s instanceof net.Socket) {
-            s.destroy();
-        }
-        else {
-            s.close();
-        }
-
-        delete sockets[req.body.id];
+        destroyRelaySocket(req.body.id);
 
         res.send('0');
     });
 
     app.post('/api/network/socket_send', (req, res, next) => {
-        consoleLog('Sending socket', req.body.id, req.body.data.length, 'bytes');
-
         if (!sockets[req.body.id]) {
-            return res.send('' + NSAPI_ERROR_NO_SOCKET); // NSAPI_ERROR_NO_SOCKET
+            return res.send('' + NSAPI_ERROR_NO_SOCKET);
         }
 
         let s = sockets[req.body.id];
 
+        consoleLog('Sending socket', req.body.id, req.body.data.length, 'bytes');
+
+        // One JSON number per byte, so binary payloads stay exact on this
+        // direction too (no string/UTF-8 interpretation anywhere).
         if (s instanceof net.Socket) {
             s.write(Buffer.from(req.body.data));
         }
@@ -217,7 +291,10 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
 
         // connectionState is used whenever someone calls this function again...
         if (s.connectionState) {
-            return s.connectionState;
+            // A repeated connect must still answer the synchronous XHR; the
+            // bare `return s.connectionState` this used to do left the browser
+            // blocked in send() forever.
+            return res.send('' + s.connectionState);
         }
 
         if (s instanceof net.Socket) {
@@ -251,28 +328,36 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
 
     io.on('connection', ws => {
         ws.on('socket-subscribe', id => {
-            if (!sockets[id]) return;
+            let s = sockets[id];
+            if (!s) return;
 
             consoleLog('socket-subscribe on', id);
 
-            sockets[id].subscribers.push(ws);
+            if (s.subscribers.indexOf(ws) === -1) {
+                s.subscribers.push(ws);
+            }
+
+            // The subscribing tab owns the relay socket - a relay id never
+            // leaves the tab that opened it - so losing the tab releases it.
+            s.owner = ws;
         });
 
         ws.on('disconnect', () => {
-            for (let sk of Object.keys(sockets)) {
-                let s = sockets[sk];
+            // Release every relay socket this tab owned, immediately: the
+            // browser can no longer read from or write to it, so keeping the
+            // OS socket (and its listeners) alive would just leak.
+            for (let id of Object.keys(sockets)) {
+                let s = sockets[id];
 
-                let subIx = s.subscribers.indexOf(ws);
-                if (subIx === -1) return;
+                if (s.owner !== ws) {
+                    continue;
+                }
 
-                s.subscribers.splice(subIx, 1);
+                consoleLog('Releasing relay socket', id, 'with disconnected browser tab');
+                destroyRelaySocket(id);
             }
         });
     });
-
-    io.on('socket-subscribe', id => {
-
-    })
 
     app.get('/view/:script', (req, res, next) => {
         let maxAge = 0;

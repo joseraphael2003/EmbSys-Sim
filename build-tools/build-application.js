@@ -186,11 +186,12 @@ let buildFile = async function(inputFile, outFile, extraArgs, verbose) {
 
 module.exports = {
     _build: async function(buildFn, input, outFile, extraArgs, verbose) {
-        if (!await libmbed.exists()) {
-            console.log('libmbed.a does not exist. Building...');
-
-            await libmbed.build(verbose);
-        }
+        // Always enter the component build. It is a fast no-op when the cache is
+        // fresh (flag/config hash + per-TU -MMD dependencies + source mtimes)
+        // and it is the only path that *applies* those invalidations: skipping
+        // it whenever libmbed.a merely exists is how edited HAL sources silently
+        // stayed out of the linked archive.
+        await libmbed.build(verbose);
 
         await buildFn(input, outFile, extraArgs, verbose);
     },

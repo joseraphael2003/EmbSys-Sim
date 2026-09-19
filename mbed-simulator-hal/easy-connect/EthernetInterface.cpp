@@ -271,7 +271,11 @@ int EthernetInterface::socket_recv_internal(struct simulated_socket *socket, voi
             return NSAPI_ERROR_WOULD_BLOCK;
         }
 
-        emscripten_sleep(10);
+        // thread_sleep_for() is the simulator's cooperative seam: it yields to
+        // the browser event loop and drains the queued socket notifications on
+        // the way back (T3), so the next poll below already sees new data,
+        // EOF or a connection error.
+        thread_sleep_for(10);
         waited += 10;
     }
 }
@@ -340,4 +344,45 @@ extern "C" void handle_ethernet_sigio(uint32_t socketPtr) {
     }
 
     thread_sleep_for(1);
+}
+
+/**
+ * Deliver the socket notifications the JS bridge queued while wasm was
+ * suspended (Asyncify re-entry guard, T3).
+ *
+ * viewer/js-hal/network.js never calls handle_ethernet_sigio() itself: a
+ * socket.io/XHR task always runs while Asyncify has unwound the stack, and
+ * entering wasm there starts a nested unwind that overwrites the pending unwind
+ * record - the application's own sleep can then never resume, so it deadlocks
+ * without even a page error. The bridge queues one notification per socket
+ * instead, and wasm pulls them from here right after a cooperative yield has
+ * resumed (see targets/TARGET_SIMULATOR/platform/mbed_wait_api_no_rtos.cpp), so
+ * every callback runs with a clean Asyncify state and in FIFO order.
+ */
+EMSCRIPTEN_KEEPALIVE
+extern "C" void simulator_drain_network_events(void) {
+    // handle_ethernet_sigio() yields, and that yield drains the queue again on
+    // the way back: skip the re-entry and let the outer loop pick up whatever
+    // the callbacks queued meanwhile (still in order).
+    static bool draining = false;
+
+    if (draining) {
+        return;
+    }
+
+    draining = true;
+
+    for (;;) {
+        uint32_t socketPtr = (uint32_t) EM_ASM_INT({
+            return window.MbedJSHal.network.take_pending_sigio();
+        });
+
+        if (socketPtr == 0) {
+            break;
+        }
+
+        handle_ethernet_sigio(socketPtr);
+    }
+
+    draining = false;
 }

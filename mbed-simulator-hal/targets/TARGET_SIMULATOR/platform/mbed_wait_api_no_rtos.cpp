@@ -21,6 +21,29 @@
 #include "platform/mbed_thread.h"
 #include "platform/mbed_wait_api.h"
 
+/* ---- cooperative yield (T3) ----
+ *
+ * Every delay in the simulator is a yield to the browser event loop. Socket
+ * notifications that arrive while the module is suspended cannot be delivered
+ * from JavaScript: a browser task always runs while Asyncify has unwound the
+ * stack, and entering wasm there starts a nested unwind that destroys the
+ * pending one (the application's sleep then never resumes - see
+ * viewer/js-hal/network.js). The JS bridge queues those notifications instead,
+ * and this file drains the queue immediately after a yield has resumed, i.e.
+ * the first moment wasm is running again with a clean Asyncify state.
+ *
+ * The drain is defined by the network adapter (easy-connect/EthernetInterface.cpp)
+ * and is referenced unconditionally on purpose: a weak reference does NOT pull
+ * a defining archive member out of libmbed.a, which would silently disable sigio
+ * delivery in every application that needs it.
+ */
+extern "C" void simulator_drain_network_events(void);
+
+static void cooperative_yield(unsigned int ms) {
+    emscripten_sleep(ms);
+    simulator_drain_network_events();
+}
+
 /* ---- C delay API (mbed_wait_api.h contract) ---- */
 
 void wait_us(int us) {
@@ -30,13 +53,13 @@ void wait_us(int us) {
     if (ms < 1) {
         ms = 1;
     }
-    emscripten_sleep(ms);
+    cooperative_yield(ms);
 }
 
 void wait_ns(unsigned int ns) {
     // Sub-microsecond delays cannot be honored through the host event loop;
     // yield once so busy-wait loops still cooperate.
-    emscripten_sleep(1);
+    cooperative_yield(1);
 }
 
 /* ---- C thread API (mbed_thread.h contract, no-RTOS branch) ---- */
@@ -51,7 +74,7 @@ void thread_sleep_for(uint32_t millisec) {
     if (millisec == 0) {
         return;
     }
-    emscripten_sleep(millisec);
+    cooperative_yield(millisec);
 }
 
 void thread_sleep_until(uint64_t millisec) {
@@ -63,7 +86,7 @@ void thread_sleep_until(uint64_t millisec) {
         if (delta > 0x7fffffffULL) {
             delta = 1;
         }
-        emscripten_sleep((unsigned int) delta);
+        cooperative_yield((unsigned int) delta);
     }
 }
 
@@ -87,7 +110,7 @@ OsClock::time_point do_timed_sleep_absolute(OsClock::time_point wake_time,
         }
         // Cooperative 10 ms poll of the wake condition; keeps the browser
         // event loop live so socket data can arrive and satisfy predicates.
-        emscripten_sleep(10);
+        cooperative_yield(10);
     }
     return OsClock::now_with_init_done();
 }
@@ -97,7 +120,7 @@ void do_untimed_sleep(bool (*wake_predicate)(void *), void *wake_predicate_handl
         if (wake_predicate && wake_predicate(wake_predicate_handle)) {
             break;
         }
-        emscripten_sleep(10);
+        cooperative_yield(10);
     }
 }
 
@@ -129,7 +152,7 @@ void do_timed_sleep_relative_or_forever(OsClock::duration_u32 wake_delay,
         if (chunk == 0) {
             break;
         }
-        emscripten_sleep(chunk);
+        cooperative_yield(chunk);
     }
 }
 

@@ -157,13 +157,19 @@ const defaultLinkFlags = [
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
     '-s', 'FORCE_FILESYSTEM=1',
     '-s', 'ASYNCIFY=1',
-    // NOTE: viewer/js-hal/*.js call the bare `ccall(...)` global (gpio IRQ,
-    // timers, network sigio, lora downlink). emsdk 3.x only defines it when
-    // EXPORTED_RUNTIME_METHODS requests it, so today those callbacks throw
-    // `ccall is not a function` in the page. Exporting it here activates the
-    // sigio path, which nested-unwinds Asyncify while the app sleeps and
-    // deadlocks (see T3: "Asyncify re-entry guard"); the export therefore
-    // belongs with T3's queued-dispatch work, not with a link-flag change.
+    // viewer/js-hal/*.js call the bare `ccall(...)` global (gpio IRQ, timers,
+    // network sigio, lora downlink); emsdk 3.x only emits it when the link
+    // exports it. `viewer/js-ui/init.js` republishes both on `window` once the
+    // runtime is up, because the js-hal modules are plain scripts.
+    //
+    // Exporting ccall used to activate a deadlock: the network bridge called
+    // handle_ethernet_sigio() from a browser task, i.e. while the module was
+    // suspended, and the nested Asyncify unwind clobbered the pending unwind
+    // record. T3 moved that dispatch into wasm (the JS bridge only queues
+    // notifications; see viewer/js-hal/network.js and
+    // easy-connect/EthernetInterface.cpp), so the callbacks these flags enable
+    // now run with a clean Asyncify state.
+    '-s', 'EXPORTED_RUNTIME_METHODS=ccall,cwrap',
     '-flto',
     '-gsource-map'
 ];

@@ -1,0 +1,94 @@
+{
+    "name": "test-relay",
+    "timeoutMs": 120000,
+    "steps": [
+        {
+            "name": "relay fixture boots",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:boot"
+            }
+        },
+        {
+            "name": "binary payload survived the relay byte for byte",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:binary-ok 1"
+            }
+        },
+        {
+            "name": "burst socket connected",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:burst-connected"
+            }
+        },
+        {
+            "name": "application sleeps through the burst window",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:burst-sleep-begin"
+            }
+        },
+        {
+            "name": "queued sigio callbacks were delivered by the first drain after the resume",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:sigio-after-sleep [1-9][0-9]*"
+            }
+        },
+        {
+            "name": "all burst bytes arrived (no loss, no truncation)",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:burst-received 1536"
+            }
+        },
+        {
+            "name": "burst payload intact: order kept, 0x00 bytes preserved",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:burst-corrupt 0"
+            }
+        },
+        {
+            "name": "burst phase verdict",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:burst-ok 1"
+            }
+        },
+        {
+            "name": "peer FIN surfaces as EOF within the 2 s bound",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:eof-ok 1"
+            }
+        },
+        {
+            "name": "abrupt termination surfaces as an NSAPI error within the 2 s bound",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:reset-ok 1"
+            }
+        },
+        {
+            "name": "relay fixture ran to completion",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "RELAY:done"
+            }
+        }
+    ]
+}

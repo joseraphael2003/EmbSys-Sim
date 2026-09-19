@@ -1,0 +1,7 @@
+{
+  "name": "test-relay",
+  "compiler-args": [
+    "-include",
+    "mbed-target-config.h"
+  ]
+}

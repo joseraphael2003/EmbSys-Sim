@@ -84,6 +84,14 @@
         // asynchronously, so signal start from here rather than from a synchronous
         // preRun callback to avoid notifying before the runtime is actually ready.
         onRuntimeInitialized: function() {
+            // The link exports ccall/cwrap (helpers.defaultLinkFlags), but
+            // emsdk 3.x publishes them as Module members only. js-hal modules
+            // are plain scripts that call them as bare globals, so expose them
+            // on window too. (The generated glue assigns Module.ccall in its
+            // postamble, which has run by the time this fires.)
+            if (typeof Module.ccall === 'function') window.ccall = Module.ccall;
+            if (typeof Module.cwrap === 'function') window.cwrap = Module.cwrap;
+
             if (typeof window.onStartExecution === 'function') {
                 window.onStartExecution();
             }
