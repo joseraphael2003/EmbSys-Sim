@@ -1,0 +1,174 @@
+{
+    "name": "test-tls",
+    "timeoutMs": 300000,
+    "steps": [
+        {
+            "name": "fixture boots and joins the relay network",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSFIXTURE:net 0"
+            }
+        },
+        {
+            "name": "entropy bridge fills 64 bytes from the browser CSPRNG",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSENTROPY:ok 64 bytes"
+            }
+        },
+        {
+            "name": "entropy bridge fills a request above the 64 KiB Web Crypto quota",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSENTROPY:chunked 70000 bytes"
+            }
+        },
+        {
+            "name": "missing window.crypto fails closed",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSENTROPY:no-crypto rc=-60 olen=0"
+            }
+        },
+        {
+            "name": "missing window.crypto reports fail-closed explicitly",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSENTROPY:fail-closed-no-crypto"
+            }
+        },
+        {
+            "name": "the bridge works again once Web Crypto is restored",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSENTROPY:restored rc=0 olen=8"
+            }
+        },
+        {
+            "name": "missing getRandomValues fails closed",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSENTROPY:fail-closed-no-grv"
+            }
+        },
+        {
+            "name": "ECDSA certificate: TLS handshake completes",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:ecdsa handshake-ok"
+            }
+        },
+        {
+            "name": "ECDSA certificate: HTTPS GET returns 200 OK with the payload",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:ecdsa http-ok [0-9]+ bytes"
+            }
+        },
+        {
+            "name": "RSA certificate: TLS handshake completes",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:rsa handshake-ok"
+            }
+        },
+        {
+            "name": "RSA certificate: HTTPS GET returns 200 OK with the payload",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:rsa http-ok [0-9]+ bytes"
+            }
+        },
+        {
+            "name": "untrusted (self-signed) certificate is rejected with NSAPI_ERROR_AUTH_FAILURE",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:untrusted -3011"
+            }
+        },
+        {
+            "name": "application keeps running after the untrusted certificate rejection",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:untrusted continued"
+            }
+        },
+        {
+            "name": "valid certificate under a name it does not cover is rejected",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:hostname-mismatch -3011"
+            }
+        },
+        {
+            "name": "application keeps running after the hostname mismatch rejection",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:hostname-mismatch continued"
+            }
+        },
+        {
+            "name": "no Web Crypto means no handshake (fails closed instead of using weak keys)",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:no-entropy -3011"
+            }
+        },
+        {
+            "name": "the simulator clock reports the host wall clock",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSCLOCK:plausible=1"
+            }
+        },
+        {
+            "name": "a certificate that is not valid yet is refused",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:not-yet-valid -3011"
+            }
+        },
+        {
+            "name": "an expired certificate is refused (expiry is enforced, not bypassed)",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS:expired -3011"
+            }
+        },
+        {
+            "name": "the clock is restored after the validity-window probes",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSCLOCK:restored-time=1[6-9][0-9]{8}"
+            }
+        },
+        {
+            "name": "fixture completed every TLS scenario",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLSFIXTURE:done"
+            }
+        }
+    ]
+}

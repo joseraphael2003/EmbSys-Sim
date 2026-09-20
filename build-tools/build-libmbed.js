@@ -305,15 +305,19 @@ const COMPONENTS = [
     },
     {
         // Vendored Emscripten target: the primitives CE's HAL conveniences
-        // call, plus the cooperative runtime seam (sleeping, critical
-        // sections, error handling, ThisThread/Kernel shims). analogin/pwmout/
-        // rtc/us_ticker/flash APIs are OS5-era files that are not ported yet;
-        // drivers/Ticker.cpp and platform/mbed_retarget.cpp are superseded by
-        // the CE driver layer / Emscripten stdio.
+        // call, plus the cooperative runtime seam (sleeping, wall clock,
+        // critical sections, error handling, ThisThread/Kernel shims) and the
+        // Web Crypto entropy source Mbed TLS draws from
+        // (entropy_hardware_poll.c -> window.crypto.getRandomValues()).
+        // analogin/pwmout/us_ticker/flash APIs are OS5-era files that are not
+        // ported yet; drivers/Ticker.cpp and platform/mbed_retarget.cpp are
+        // superseded by the CE driver layer / Emscripten stdio.
         name: 'targets/TARGET_SIMULATOR',
         files: [
+            'targets/TARGET_SIMULATOR/entropy_hardware_poll.c',
             'targets/TARGET_SIMULATOR/gpio_api.c',
             'targets/TARGET_SIMULATOR/gpio_irq_api.c',
+            'targets/TARGET_SIMULATOR/rtc_api.c',
             'targets/TARGET_SIMULATOR/serial_api.c',
             'targets/TARGET_SIMULATOR/platform/mbed_critical.cpp',
             'targets/TARGET_SIMULATOR/platform/mbed_error.c',
@@ -452,8 +456,6 @@ for (const deferred of NOT_YET_PORTED) {
 // changing them clears the object cache.
 const componentBuildFlags = [
     '-O2',
-    '-DMBEDTLS_TEST_NULL_ENTROPY',
-    '-DMBEDTLS_NO_DEFAULT_ENTROPY_SOURCES',
 ];
 
 // Expand a declared directory into its C/C++ sources (recursive; the trees

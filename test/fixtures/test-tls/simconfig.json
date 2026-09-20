@@ -1,0 +1,7 @@
+{
+  "name": "test-tls",
+  "compiler-args": [
+    "-include",
+    "mbed-target-config.h"
+  ]
+}

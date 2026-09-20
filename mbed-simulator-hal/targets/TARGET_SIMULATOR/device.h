@@ -162,9 +162,11 @@
 #endif
 
 // Device features — the virtual board exposes only what the JS HAL models.
-// FLASH/RTC/ANALOG/PWM have no backing hardware here; CE headers compile their
+// FLASH/ANALOG/PWM have no backing hardware here; CE headers compile their
 // drivers out when these are 0 (matching .simignore excludes). InterruptIn is
 // backed: viewer/js-hal/gpio.js calls the vendored gpio_irq_api.c bridge.
+// RTC is backed too: rtc_api.c maps rtc_read/rtc_write onto the browser clock,
+// which is what makes time()/set_time() and X.509 validity windows work.
 #define DEVICE_INTERRUPTIN    1
 #define DEVICE_ANALOGIN       0
 #define DEVICE_ANALOGOUT      0
@@ -172,6 +174,6 @@
 #define DEVICE_SERIAL         1
 #define DEVICE_FLASH          0
 #define DEVICE_EMAC           1
-#define DEVICE_RTC            0
+#define DEVICE_RTC            1
 
 #endif  // __SIMULATOR_DEVICE_H__
