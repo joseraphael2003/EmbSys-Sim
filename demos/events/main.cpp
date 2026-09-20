@@ -1,6 +1,8 @@
 #include "mbed.h"
 #include "mbed_events.h"
 
+using namespace std::chrono;
+
 // An EventQueue is a very useful construct in Mbed OS, it allows you to schedule events
 // and to defer from one context to another (e.g. from ISR to normal thread) without
 // writing your own state machines, and while maintaining context.
@@ -25,7 +27,7 @@ void btn_fall() {
 
 int main() {
     // Schedule an event to run every second
-    queue.call_every(1000, &blink_led);
+    queue.call_every(1s, &blink_led);
 
     // Normally code in the `fall` handler runs in an ISR,
     // but you can directly defer it to the thread that runs the queue

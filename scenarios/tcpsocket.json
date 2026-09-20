@@ -1,0 +1,38 @@
+{
+    "name": "tcpsocket",
+    "timeoutMs": 120000,
+    "steps": [
+        {
+            "name": "network interface reports its address",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "IP address: "
+            }
+        },
+        {
+            "name": "host name resolved and HTTP request sent",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "sent \\d+ \\[GET / HTTP/1\\.1\\]"
+            }
+        },
+        {
+            "name": "HTTP response received over the resolved address",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "recv \\d+ \\[HTTP/1\\."
+            }
+        },
+        {
+            "name": "payload resolved to an external address",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "External IP address: [0-9]"
+            }
+        }
+    ]
+}

@@ -1,0 +1,22 @@
+{
+    "name": "ntp",
+    "timeoutMs": 120000,
+    "steps": [
+        {
+            "name": "time protocol demo boots and joins the network",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "IP address is: "
+            }
+        },
+        {
+            "name": "time.nist.gov resolved to a literal address",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "Time protocol example"
+            }
+        }
+    ]
+}

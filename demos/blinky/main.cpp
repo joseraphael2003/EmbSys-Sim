@@ -1,5 +1,7 @@
 #include "mbed.h"
 
+using namespace std::chrono;
+
 DigitalOut led(LED1);
 
 int main() {
@@ -7,6 +9,6 @@ int main() {
         led = !led;
         printf("Blink! LED is now %d\n", led.read());
 
-        wait_ms(500);
+        ThisThread::sleep_for(500ms);
     }
 }

@@ -1,0 +1,22 @@
+{
+    "name": "coap",
+    "timeoutMs": 120000,
+    "steps": [
+        {
+            "name": "CoAP handle initialised and message built",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "Calculated message length: \\d+ bytes"
+            }
+        },
+        {
+            "name": "request sent to coap.me through the resolved address",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "Sent \\d+ bytes to coap://coap\\.me:5683"
+            }
+        }
+    ]
+}

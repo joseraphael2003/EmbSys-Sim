@@ -1,0 +1,22 @@
+{
+    "name": "http",
+    "timeoutMs": 180000,
+    "steps": [
+        {
+            "name": "GET request receives the teapot status",
+            "timeoutMs": 90000,
+            "assert": {
+                "type": "serial",
+                "regex": "Status: 418 - I'm a teapot"
+            }
+        },
+        {
+            "name": "POST request receives 200 OK",
+            "timeoutMs": 90000,
+            "assert": {
+                "type": "serial",
+                "regex": "Status: 200 - OK"
+            }
+        }
+    ]
+}

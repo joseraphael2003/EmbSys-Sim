@@ -5,6 +5,8 @@
 #include "SimulatorBlockDevice.h"
 #include "eventOS_scheduler.h"
 
+using namespace std::chrono;
+
 SimulatorBlockDevice bd("myblockdevice", 128 * 512, 512);
 
 // Declaring pointers for access to Pelion Device Management Client resources outside of main()
@@ -52,7 +54,7 @@ void blink_callback(MbedCloudClientResource *resource, const uint8_t *buffer, ui
     while (pos != string::npos) {
         int len = atoi(s.substr(i, pos - i).c_str());
 
-        mbed_event_queue()->call_in(total_len + len, &blink);
+        mbed_event_queue()->call_in(milliseconds(total_len + len), &blink);
 
         total_len += len;
         i = ++pos;
@@ -124,11 +126,15 @@ int main() {
 
     // The timer fires on an interrupt context, but debounces it to the eventqueue, so it's safe to do network operations
     Ticker timer;
-    timer.attach(mbed_event_queue()->event(&fake_button_press), 5.0);
+    timer.attach(mbed_event_queue()->event(&fake_button_press), 5s);
 
-    mbed_event_queue()->call_every(1, &eventOS_scheduler_run_until_idle);
+    mbed_event_queue()->call_every(1ms, &eventOS_scheduler_run_until_idle);
 
     mbed_event_queue()->dispatch_forever();
 
-    wait(osWaitForever);
+    // There is no RTOS in the simulator: park the main thread in cooperative
+    // sleeps instead of returning from main.
+    while (true) {
+        ThisThread::sleep_for(1s);
+    }
 }

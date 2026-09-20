@@ -1,0 +1,14 @@
+{
+    "name": "temperature",
+    "timeoutMs": 30000,
+    "steps": [
+        {
+            "name": "temperature demo boots with the Sht31 over I2C",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "substring": "Set the temperature above 25 degrees to trigger the warning LED"
+            }
+        }
+    ]
+}

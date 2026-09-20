@@ -77,16 +77,10 @@ public:
         static EthernetInterface ethernet;
         return &ethernet;
     }
-    // DNS pure virtuals (NetworkStack : DNS). The simulator resolves literal
-    // IP addresses only; real DNS arrives with the T3 relay hardening.
-    virtual nsapi_value_or_error_t getaddrinfo(const char *hostname,
-                                               SocketAddress *hints,
-                                               SocketAddress **res,
-                                               const char *interface_name = NULL);
-    virtual nsapi_value_or_error_t getaddrinfo_async(const char *hostname,
-                                                     SocketAddress *hints,
-                                                     hostbyname_cb_t callback,
-                                                     const char *interface_name = NULL);
+    // DNS (NetworkStack : DNS). Resolution lives in easy-connect/nsapi_dns_sim.cpp
+    // (the relay's host resolver backs nsapi_dns_query*), so the CE base-class
+    // gethostbyname/getaddrinfo implementations are what applications use;
+    // only the non-cancellable async bookkeeping is simulator-specific.
     virtual nsapi_error_t gethostbyname_async_cancel(int id);
     virtual nsapi_error_t add_dns_server(const SocketAddress &address,
                                          const char *interface_name = NULL);

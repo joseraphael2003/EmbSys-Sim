@@ -1,0 +1,7 @@
+{
+  "name": "test-dns",
+  "compiler-args": [
+    "-include",
+    "mbed-target-config.h"
+  ]
+}

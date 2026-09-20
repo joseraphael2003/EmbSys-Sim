@@ -8,6 +8,8 @@
 #include "stm32f413h_discovery_ts.h"
 #include "stm32f413h_discovery_lcd.h"
 
+using namespace std::chrono;
+
 TS_StateTypeDef TS_State = { 0 };
 
 int main() {
@@ -43,7 +45,7 @@ int main() {
             BSP_LCD_SetTextColor(LCD_COLOR_RED);
             BSP_LCD_FillCircle(x1, y1, 5);
 
-            wait_ms(10);
+            ThisThread::sleep_for(10ms);
         }
     }
 }

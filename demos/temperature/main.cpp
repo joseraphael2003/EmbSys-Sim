@@ -2,6 +2,8 @@
 #include "C12832.h"
 #include "Sht31.h"
 
+using namespace std::chrono;
+
 C12832 lcd(SPI_MOSI, SPI_SCK, SPI_MISO, p8, p11);
 Sht31 sht31(I2C_SDA, I2C_SCL);
 DigitalOut led(LED1);
@@ -23,6 +25,6 @@ int main() {
         // turn on LED if the temperature is above 25 degrees
         led = temp > 25.0f;
 
-        wait(0.5f);
+        ThisThread::sleep_for(500ms);
     }
 }

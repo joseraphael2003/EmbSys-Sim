@@ -1,5 +1,7 @@
 #include "mbed.h"
 
+using namespace std::chrono;
+
 DigitalOut led1(LED1);
 DigitalOut led2(LED2);
 DigitalOut led3(LED3);
@@ -28,9 +30,13 @@ int main() {
     printf("LED1 will blink every second, LED3 will toggle after 2.5 seconds, LED2 can be toggled through BUTTON1.\n");
     printf("-----------------------------------\n\n");
 
-    t1.attach(callback(&blink_led1), 1.0f);
-    t2.attach(callback(&turn_led3_on), 2.5f);
+    t1.attach(callback(&blink_led1), 1s);
+    t2.attach(callback(&turn_led3_on), 2500ms);
     btn.fall(callback(&toggle_led2));
 
-    wait_ms(osWaitForever);
+    // There is no RTOS in the simulator: park the main thread in cooperative
+    // sleeps so the ticker, timeout and button callbacks keep being serviced.
+    while (true) {
+        ThisThread::sleep_for(1s);
+    }
 }

@@ -1,0 +1,28 @@
+{
+    "name": "busout",
+    "timeoutMs": 30000,
+    "steps": [
+        {
+            "name": "LED4 (bus bit 3) is low for counts 0..7",
+            "wait": 1000
+        },
+        {
+            "name": "LED4 reads 0 in the low half of the cycle",
+            "read": {
+                "gpio": "LED4",
+                "expect": 0
+            }
+        },
+        {
+            "name": "wait for the high half of the cycle (count 8..15)",
+            "wait": 2500
+        },
+        {
+            "name": "LED4 reads 1 in the high half of the cycle",
+            "read": {
+                "gpio": "LED4",
+                "expect": 1
+            }
+        }
+    ]
+}

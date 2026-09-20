@@ -1,6 +1,8 @@
 #include "mbed.h"
 #include "C12832.h"
 
+using namespace std::chrono;
+
 C12832 lcd(SPI_MOSI, SPI_SCK, SPI_MISO, p8, p11);
 
 // From https://os.mbed.com/users/dreschpe/code/Christmas-LCD
@@ -176,17 +178,17 @@ int main() {
     lcd.setmode(XOR); // XOR - a second print will erase
     for (i = -15; i < 75;) {
         lcd.print_bm(bitmSan1, i, 2);
-        wait(0.2);
+        ThisThread::sleep_for(200ms);
         lcd.copy_to_lcd(); // update lcd
         lcd.print_bm(bitmSan1, i, 2); // erase
         i = i + s;
         lcd.print_bm(bitmSan2, i, 2); // print next
-        wait(0.2);
+        ThisThread::sleep_for(200ms);
         lcd.copy_to_lcd(); // update lcd
         lcd.print_bm(bitmSan2, i, 2); // erase
         i = i + s;
         lcd.print_bm(bitmSan3, i, 2); // print next
-        wait(0.2);
+        ThisThread::sleep_for(200ms);
         lcd.copy_to_lcd(); // update lcd
         lcd.print_bm(bitmSan3, i, 2); // erase
         i = i + s;
@@ -200,7 +202,7 @@ int main() {
         lcd.printf("Christmas");
         lcd.copy_to_lcd();
         lcd.locate(5, i);
-        wait(0.2);
+        ThisThread::sleep_for(200ms);
         lcd.printf("Happy");
         lcd.locate(5, i + 12);
         lcd.printf("Christmas");

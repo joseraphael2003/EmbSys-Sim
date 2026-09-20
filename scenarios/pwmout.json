@@ -1,0 +1,14 @@
+{
+    "name": "pwmout",
+    "timeoutMs": 20000,
+    "steps": [
+        {
+            "name": "PwmOut sweep starts at 10% duty",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "LED is now 0\\.10"
+            }
+        }
+    ]
+}

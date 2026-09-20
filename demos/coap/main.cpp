@@ -5,6 +5,8 @@
 #include "sn_coap_header.h"
 #include "UDPSocket.h"
 
+using namespace std::chrono;
+
 UDPSocket coap_socket;           // Socket to talk CoAP over
 
 struct coap_s* coapHandle;
@@ -105,7 +107,17 @@ int main() {
     // }
     // printf("\n");
 
-    int scount = coap_socket.sendto("coap.me", 5683, message_ptr, message_len);
+    // Mbed OS 6 removed the UDPSocket::sendto(const char *host, port, ...)
+    // overloads: resolve the server through the network interface, then send to
+    // the resulting SocketAddress.
+    SocketAddress coap_server;
+    if (network->gethostbyname("coap.me", &coap_server) != NSAPI_ERROR_OK) {
+        printf("Could not resolve coap.me\n");
+        return 1;
+    }
+    coap_server.set_port(5683);
+
+    int scount = coap_socket.sendto(coap_server, message_ptr, message_len);
     printf("Sent %d bytes to coap://coap.me:5683 (path=%s)\n", scount, coap_uri_path);
 
     recv_coap_message();
@@ -115,5 +127,9 @@ int main() {
 
     printf("Done!\n");
 
-    wait(osWaitForever);
+    // There is no RTOS in the simulator: park the main thread in cooperative
+    // sleeps instead of returning from main.
+    while (true) {
+        ThisThread::sleep_for(1s);
+    }
 }

@@ -2,6 +2,8 @@
 #include "NetworkInterface.h"
 #include "http_request.h"
 
+using namespace std::chrono;
+
 void dump_response(HttpResponse* res) {
     printf("Status: %d - %s\n", res->get_status_code(), res->get_status_message().c_str());
 
@@ -56,5 +58,9 @@ int main() {
         delete post_req;
     }
 
-    wait(osWaitForever);
+    // There is no RTOS in the simulator: park the main thread in cooperative
+    // sleeps instead of returning from main.
+    while (true) {
+        ThisThread::sleep_for(1s);
+    }
 }

@@ -1,0 +1,61 @@
+diff --git a/source/http_request.h b/source/http_request.h
+index 7f2c5a5..77dd326 100644
+--- a/source/http_request.h
++++ b/source/http_request.h
+@@ -52,7 +52,7 @@ public:
+                                which might use lots of memory.
+     */
+     HttpRequest(NetworkInterface* network, http_method method, const char* url, Callback<void(const char *at, uint32_t length)> bodyCallback = 0)
+-        : HttpRequestBase(NULL, bodyCallback)
++        : HttpRequestBase(NULL, bodyCallback), _network(network)
+     {
+         _error = 0;
+         _response = NULL;
+@@ -76,7 +76,7 @@ public:
+                                 which might use lots of memory.
+     */
+     HttpRequest(TCPSocket* socket, http_method method, const char* url, Callback<void(const char *at, uint32_t length)> bodyCallback = 0)
+-        : HttpRequestBase(socket, bodyCallback)
++        : HttpRequestBase(socket, bodyCallback), _network(NULL)
+     {
+         _error = 0;
+         _response = NULL;
+@@ -92,9 +92,37 @@ public:
+ 
+ protected:
+ 
++    /**
++     * Connect the socket to <host>:<port>.
++     *
++     * Mbed OS 6 removed the Socket::connect(const char *host, uint16_t port)
++     * overloads, so the host is resolved through a NetworkInterface and the
++     * socket then connects to the resulting SocketAddress. The interface the
++     * request was created with is used when the caller supplied one (a
++     * caller-supplied socket falls back to the default interface of the
++     * system).
++     */
+     virtual nsapi_error_t connect_socket(char *host, uint16_t port) {
+-        return ((TCPSocket*)_socket)->connect(host, port);
++        NetworkInterface *network = _network ? _network : NetworkInterface::get_default_instance();
++        if (network == NULL) {
++            return NSAPI_ERROR_NO_CONNECTION;
++        }
++
++        SocketAddress address;
++        nsapi_error_t err = network->gethostbyname(host, &address);
++        if (err != NSAPI_ERROR_OK) {
++            return err;
++        }
++
++        address.set_port(port);
++
++        return ((TCPSocket*)_socket)->connect(address);
+     }
++
++private:
++
++    /** Network interface this request opens its socket on (NULL for a caller-supplied socket) */
++    NetworkInterface *_network;
+ };
+ 
+ #endif // _HTTP_REQUEST_

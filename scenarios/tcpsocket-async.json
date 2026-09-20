@@ -1,0 +1,38 @@
+{
+    "name": "tcpsocket-async",
+    "timeoutMs": 120000,
+    "steps": [
+        {
+            "name": "sigio state machine starts with the resolved address",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "socket sigio, next_state=0"
+            }
+        },
+        {
+            "name": "non-blocking connect reaches the server",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "Connected to server"
+            }
+        },
+        {
+            "name": "response received",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "Received:"
+            }
+        },
+        {
+            "name": "socket closed by the state machine",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "Socket close"
+            }
+        }
+    ]
+}

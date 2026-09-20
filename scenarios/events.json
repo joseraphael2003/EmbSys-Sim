@@ -1,0 +1,14 @@
+{
+    "name": "events",
+    "timeoutMs": 30000,
+    "steps": [
+        {
+            "name": "EventQueue::call_every(1s) dispatches repeatedly",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "blink_led invoked"
+            }
+        }
+    ]
+}

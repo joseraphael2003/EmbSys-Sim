@@ -117,45 +117,6 @@ nsapi_error_t EthernetInterface::get_gateway(SocketAddress *address) {
     return NSAPI_ERROR_UNSUPPORTED;
 }
 
-// DNS: literal-address parse only for T1. SocketAddress(const char*) sets the
-// address and reports a parse failure via get_addr().
-nsapi_value_or_error_t EthernetInterface::getaddrinfo(const char *hostname,
-                                                      SocketAddress *hints,
-                                                      SocketAddress **res,
-                                                      const char *interface_name) {
-    (void) hints;
-    (void) interface_name;
-
-    if (hostname == NULL || res == NULL) {
-        return NSAPI_ERROR_PARAMETER;
-    }
-
-    SocketAddress *addr = new SocketAddress(hostname);
-    if (addr->get_addr().version == NSAPI_UNSPEC) {
-        delete addr;
-        return NSAPI_ERROR_DNS_FAILURE;
-    }
-
-    *res = addr;
-    return 1;
-}
-
-nsapi_value_or_error_t EthernetInterface::getaddrinfo_async(const char *hostname,
-                                                            SocketAddress *hints,
-                                                            hostbyname_cb_t callback,
-                                                            const char *interface_name) {
-    // Resolve synchronously and deliver the callback immediately; the async
-    // machinery is not needed for the cooperative simulator.
-    SocketAddress *addr = NULL;
-    int ret = getaddrinfo(hostname, hints, &addr, interface_name);
-    if (ret > 0 && callback) {
-        callback(NSAPI_ERROR_OK, addr);
-        return 0;
-    }
-    delete addr;
-    return ret;
-}
-
 nsapi_error_t EthernetInterface::gethostbyname_async_cancel(int id) {
     (void) id;
     return NSAPI_ERROR_OK;

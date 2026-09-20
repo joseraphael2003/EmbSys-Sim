@@ -70,6 +70,11 @@ const defaultBuildFlags = [
     '-I' + Path.join(HAL_DIR, 'mbed-os', 'platform', 'cxxsupport'),
     '-I' + Path.join(HAL_DIR, 'mbed-os', 'drivers', 'include'),
     '-I' + Path.join(HAL_DIR, 'mbed-os', 'events', 'include'),
+    // Mbed CE's events library exports ./include/events as an INTERFACE include
+    // directory (events/CMakeLists.txt), which is what makes the documented
+    // `#include "mbed_events.h"` / `#include "mbed_shared_queues.h"` form
+    // resolve for applications and third-party libraries.
+    '-I' + Path.join(HAL_DIR, 'mbed-os', 'events', 'include', 'events'),
     '-I' + Path.join(HAL_DIR, 'mbed-os', 'connectivity', 'netsocket', 'include'),
     '-I' + Path.join(HAL_DIR, 'mbed-os', 'connectivity', 'netsocket', 'include', 'netsocket'),
     '-I' + Path.join(HAL_DIR, 'mbed-os', 'hal', 'include'),
@@ -98,6 +103,12 @@ const defaultBuildFlags = [
     '-DMBED_CONF_NSAPI_PACKET_SIZE=592',
     // Mbed CE drivers/mbed_lib.json5 -> macro_name MBED_CRC_TABLE_SIZE (16).
     '-DMBED_CRC_TABLE_SIZE=16',
+    // Mbed CE platform.callback-nontrivial (platform/mbed_lib.json). The
+    // retained demos hand EventQueue::event()/call_*() function objects
+    // (e.g. btn.fall(queue.event(&handler))), which store an events::Event by
+    // value; without this the CE Callback static assert fires ("F must be
+    // TriviallyCopyable").
+    '-DMBED_CONF_PLATFORM_CALLBACK_NONTRIVIAL=1',
     '-DMBEDTLS_CONFIG_FILE=\"simulator_mbedtls_config.h\"',
     '-DMBED_CONF_PLATFORM_STDIO_CONVERT_NEWLINES=1',
     '-DMBED_CONF_MBED_TRACE_ENABLE=1',
@@ -169,7 +180,13 @@ const defaultLinkFlags = [
     // notifications; see viewer/js-hal/network.js and
     // easy-connect/EthernetInterface.cpp), so the callbacks these flags enable
     // now run with a clean Asyncify state.
-    '-s', 'EXPORTED_RUNTIME_METHODS=ccall,cwrap',
+    // viewer/js-hal/*.js is plain page-scope JavaScript, so every runtime
+    // method it calls has to be exported on Module: emsdk 3.x installs
+    // aborting getters for unexported methods (and dropped the legacy
+    // Pointer_stringify). network.js needs UTF8ToString for hostnames, and
+    // allocate/intArrayFromString/ALLOC_NORMAL to hand address strings back to
+    // wasm (they live in library_legacy.js, which exporting them pulls in).
+    '-s', 'EXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8,allocate,intArrayFromString,ALLOC_NORMAL',
     '-flto',
     '-gsource-map'
 ];

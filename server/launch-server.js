@@ -1,6 +1,7 @@
 const express = require('express');
 const ips = require('./get_ips')();
 const bodyParser = require('body-parser');
+const dns = require('dns');
 const net = require('net');
 const dgram = require('dgram');
 const hbs = require('hbs');
@@ -113,6 +114,38 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             address: ips[0].iface.address,
             mac: ips[0].iface.mac,
             netmask: ips[0].iface.netmask
+        });
+    });
+
+    // Host name resolution for the wasm side (hal gethostbyname/getaddrinfo ->
+    // nsapi_dns_query). The relay owns every host-side network operation, so
+    // names are resolved by the host resolver instead of by a DNS client
+    // reimplemented over UDP inside wasm: the answer is the same address the
+    // relay would dial, and the browser needs no DNS traffic of its own.
+    //
+    // The nsapi_version_t hint maps onto the address family:
+    // NSAPI_UNSPEC(0) = any, NSAPI_IPv4(1) = 4, NSAPI_IPv6(2) = 6.
+    // An empty body means "could not resolve" (the caller maps that onto
+    // NSAPI_ERROR_DNS_FAILURE).
+    app.post('/api/network/dns_lookup', (req, res, next) => {
+        const hostname = req.body && req.body.hostname;
+        const version = (req.body && req.body.version) || 0;
+
+        if (typeof hostname !== 'string' || hostname.length === 0) {
+            return res.send('');
+        }
+
+        const family = version === 1 ? 4 : (version === 2 ? 6 : 0);
+
+        consoleLog('DNS lookup', hostname, 'family', family);
+
+        dns.lookup(hostname, { family: family }, (err, address) => {
+            if (err) {
+                consoleLog('DNS lookup failed', hostname, err.code);
+                return res.send('');
+            }
+
+            res.send(address);
         });
     });
 

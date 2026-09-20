@@ -1,0 +1,62 @@
+{
+    "name": "test-dns",
+    "timeoutMs": 60000,
+    "steps": [
+        {
+            "name": "literal address resolves without a relay round trip",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:literal rc=0 addr=127\\.0\\.0\\.1"
+            }
+        },
+        {
+            "name": "host name resolves through the relay's host resolver",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:hostname rc=0 addr=127\\.0\\.0\\.1"
+            }
+        },
+        {
+            "name": "unresolvable name reports NSAPI_ERROR_DNS_FAILURE",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:unknown rc=-3009"
+            }
+        },
+        {
+            "name": "getaddrinfo answers through the same seam",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:getaddrinfo n=1 addr=127\\.0\\.0\\.1"
+            }
+        },
+        {
+            "name": "getaddrinfo_async answers through the same seam",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:addrinfo-async rc=1 addr=127\\.0\\.0\\.1"
+            }
+        },
+        {
+            "name": "the resolved address is dialable",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:connect rc=0"
+            }
+        },
+        {
+            "name": "relay round trip through the resolved address",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:echoed 11 T5-DNS-ECHO"
+            }
+        },
+        {
+            "name": "fixture completes",
+            "assert": {
+                "type": "serial",
+                "regex": "T5DNS:done"
+            }
+        }
+    ]
+}

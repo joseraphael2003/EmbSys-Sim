@@ -118,21 +118,58 @@ window.MbedJSHal.network = (function() {
      * Get the current MAC address
      */
     Network.prototype.get_mac_address = function() {
-        return allocate(intArrayFromString(this.iface.mac), 'i8', ALLOC_NORMAL);
+        return allocate(intArrayFromString(this.iface.mac), 0);
     };
 
     /**
      * Get the current IP address
      */
     Network.prototype.get_ip_address = function() {
-        return allocate(intArrayFromString(this.iface.address), 'i8', ALLOC_NORMAL);
+        return allocate(intArrayFromString(this.iface.address), 0);
     };
 
     /**
      * Get the current netmask
      */
     Network.prototype.get_netmask = function() {
-        return allocate(intArrayFromString(this.iface.netmask), 'i8', ALLOC_NORMAL);
+        return allocate(intArrayFromString(this.iface.netmask), 0);
+    };
+
+    /**
+     * Resolve a hostname to a literal address
+     *
+     * The relay owns every host-side network operation, so resolution is asked
+     * of the server (the host resolver) instead of a DNS client reimplemented
+     * over UDP inside wasm.
+     *
+     * Returns a pointer to a NUL-terminated address string, or 0 when the name
+     * could not be resolved (the caller maps that onto NSAPI_ERROR_DNS_FAILURE).
+     *
+     * Note that this is a blocking call, like the rest of this bridge.
+     *
+     * @param hostnamePtr pointer to the hostname to resolve
+     * @param version     nsapi_version_t: 0 = any, 1 = IPv4, 2 = IPv6
+     */
+    Network.prototype.gethostbyname = function(hostnamePtr, version) {
+        var hostname = UTF8ToString(hostnamePtr);
+
+        log('gethostbyname', hostname, version);
+
+        var x = new XMLHttpRequest();
+        x.open('POST', this.host + '/api/network/dns_lookup', false);
+        x.setRequestHeader('Content-Type', 'application/json');
+        x.send(JSON.stringify({ hostname: hostname, version: version }));
+
+        if (x.status !== 200) {
+            return 0;
+        }
+
+        var address = x.responseText.trim();
+        if (address.length === 0) {
+            return 0;
+        }
+
+        return allocate(intArrayFromString(address), 0);
     };
 
     /**

@@ -1,0 +1,22 @@
+{
+    "name": "interrupts",
+    "timeoutMs": 30000,
+    "steps": [
+        {
+            "name": "Ticker (1s, chrono attach) fires",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "Ticker fired"
+            }
+        },
+        {
+            "name": "Timeout (2500ms, chrono attach) fires",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "Timeout fired"
+            }
+        }
+    ]
+}

@@ -1,0 +1,22 @@
+{
+    "name": "lcd",
+    "timeoutMs": 90000,
+    "steps": [
+        {
+            "name": "christmas demo boots and drives the C12832",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "substring": "Demo by Peter Dresche"
+            }
+        },
+        {
+            "name": "animation and scrolling text run to completion",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "substring": "Done!"
+            }
+        }
+    ]
+}
