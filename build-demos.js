@@ -4,9 +4,6 @@ const fs = require('fs');
 
 const demo_output_directory = 'out';
 
-// TLSSocket.h absent from mbed-os 5.10.2 (see docs/8-22_MODERNIZATION.md)
-const EXCLUDED_DEMOS = ['https', 'tlssocket'];
-
 async function buildDemo(root_demos_directory, demo_directory) {
     console.log(`Building ${demo_directory}...`);
 
@@ -48,9 +45,8 @@ program.option(
 );
 program.parse(process.argv);
 
-if (!fs.existsSync(demo_output_directory)) {
-    fs.mkdirSync(demo_output_directory);
-}
+// The output directory is created by cli.js (it owns the -o path), so a fresh
+// checkout builds without any pre-created out/ - see the -o handling there.
 
 async function main() {
     // Only compile real demo directories; ignore stray files at the demos root
@@ -62,20 +58,17 @@ async function main() {
 
     const total = demos.length;
     let built = 0;
-    let excluded = 0;
     let failed = 0;
 
     console.log(`Building ${total} demos sequentially...`);
 
     // Sequential compilation — never parallel. Building demos in parallel spikes
     // memory in CI (each demo compiles a full mbed-os image to wasm).
+    //
+    // Every demo in the input directory is built: there is no exclusion list to
+    // hide behind, because a demo that cannot build is a defect to fix (T7 keeps
+    // this suite at 21 of 21).
     for (const name of demos) {
-        if (EXCLUDED_DEMOS.includes(name)) {
-            console.log(`SKIPPED (excluded): ${name} — TLSSocket.h absent from mbed-os 5.10.2`);
-            excluded += 1;
-            continue;
-        }
-
         const result = await buildDemo(program.inputDir, name);
         if (result.ok) {
             built += 1;
@@ -83,12 +76,12 @@ async function main() {
             failed += 1;
             console.error(`FAILED: ${name}`);
             console.error(result.stderr);
-            console.error(`Done: ${built} built, ${excluded} excluded, ${failed} failed`);
+            console.error(`Done: ${built} built, ${failed} failed`);
             process.exit(1);
         }
     }
 
-    console.log(`Done: ${built} built, ${excluded} excluded, ${failed} failed`);
+    console.log(`Done: ${built} built, ${failed} failed`);
     process.exit(0);
 }
 

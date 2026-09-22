@@ -1,0 +1,61 @@
+{
+    "name": "test-t6-https",
+    "timeoutMs": 240000,
+    "steps": [
+        {
+            "name": "fixture boots and joins the relay network",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "T6FIXTURE:net 0"
+            }
+        },
+        {
+            "name": "the mismatch host name resolves (so its rejection is the name check)",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "T6FIXTURE:mismatch-host \\S+ resolve=0 address="
+            }
+        },
+        {
+            "name": "trusted certificate: HTTPS GET returns 200 and the expected body",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "T6:valid status=200 body=T6-HTTPS-PAYLOAD"
+            }
+        },
+        {
+            "name": "untrusted certificate refused with NSAPI_ERROR_AUTH_FAILURE",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "T6:rogue failed error=-3011"
+            }
+        },
+        {
+            "name": "host-name mismatch refused with NSAPI_ERROR_AUTH_FAILURE",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "T6:mismatch failed error=-3011"
+            }
+        },
+        {
+            "name": "application kept running after both refusals",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "T6FIXTURE:done"
+            }
+        },
+        {
+            "name": "the page is still alive after the TLS exchanges (HAL read answers)",
+            "timeoutMs": 30000,
+            "read": {
+                "gpio": "LED1"
+            }
+        }
+    ]
+}

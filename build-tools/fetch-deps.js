@@ -74,6 +74,15 @@ const MBED_OS_COMPONENT_CLOSURE = [
 ];
 
 // HAL files that must exist in the in-repo vendored TARGET_SIMULATOR target.
+//
+// This is the complete set the build consumes, so a file that disappears
+// (accidentally or by a half-done port) aborts the fetch with a name instead of
+// failing at link time. Update it in the same change that adds or removes a
+// vendored file: `flash_api.c`, `platform/mbed_retarget.cpp` and
+// `platform/mbed_power_mgmt.cpp` were on this list while T5b deleted them
+// (CE owns those locks, the simulator owns its own retarget seam), which left
+// `node build-tools/fetch-deps.js` exiting 1 on every fresh checkout until the
+// list was corrected here.
 const TARGET_SIMULATOR_CLOSURE = [
     'gpio_api.c',
     'gpio_irq_api.c',
@@ -85,16 +94,22 @@ const TARGET_SIMULATOR_CLOSURE = [
     'objects.h',
     'device.h',
     'cmsis.h',
+    'mbed-target-config.h',
+    'mbed_version.h',
+    'mbed_rtx.h',
+    'mbed_rtx_conf.h',
     'analogin_api.c',
     'analogout_api.c',
     'pwmout_api.c',
     'rtc_api.c',
     'us_ticker.c',
-    'flash_api.c',
+    'entropy_hardware_poll.c',
     'platform/mbed_wait_api_no_rtos.cpp',
-    'platform/mbed_retarget.cpp',
     'platform/mbed_critical.cpp',
-    'platform/mbed_power_mgmt.cpp',
+    'platform/mbed_fdopen.cpp',
+    'platform/mbed_error.c',
+    'rtos/Kernel.cpp',
+    'rtos/ThisThread.cpp',
 ];
 
 const ENV = Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0' });

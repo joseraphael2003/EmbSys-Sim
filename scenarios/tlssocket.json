@@ -1,0 +1,45 @@
+{
+    "name": "tlssocket",
+    "timeoutMs": 240000,
+    "steps": [
+        {
+            "name": "TLS handshake with the verified certificate completes",
+            "timeoutMs": 90000,
+            "assert": {
+                "type": "serial",
+                "regex": "TLS Socket is connected"
+            }
+        },
+        {
+            "name": "HTTP request sent over the TLS session",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "Sent 5[0-9] bytes:"
+            }
+        },
+        {
+            "name": "server answer carries 200 OK over TLS",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "HTTP/1\\.1 200 OK"
+            }
+        },
+        {
+            "name": "response body retrieved over TLS",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "substring": "Example Domain"
+            }
+        },
+        {
+            "name": "the page is still alive after the TLS exchange (HAL read answers)",
+            "timeoutMs": 30000,
+            "read": {
+                "gpio": "LED1"
+            }
+        }
+    ]
+}

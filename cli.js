@@ -94,7 +94,26 @@ let inputDir = program.inputDir ? Path.resolve(program.inputDir) : Path.resolve(
 program.inputFile = program.inputFile ? Path.resolve(program.inputFile) : null;
 program.outputFile = Path.resolve(program.outputFile);
 
-if (fs.existsSync(program.outputFile) && fs.statSync(program.outputFile).isDirectory()) {
+// `-o out` (the form documented in README.md and docs/) names a directory that
+// will hold <input-basename>.js. Deciding that only when the path already
+// exists as a directory meant the FIRST build of a fresh checkout wrote the
+// bundle to a regular FILE named `out` (with its .wasm/.components siblings
+// beside it): the viewer then 404'd every /out/<name>.js it was served, which
+// reads exactly like a substrate regression in every demo at once.
+//
+// The extension decides instead of the filesystem: a path ending in a module
+// output extension is the bundle itself, anything else is a directory, created
+// when missing. An existing non-directory in the way is a hard error rather
+// than a silently-wrong write target.
+const moduleOutputExtensions = ['.js', '.mjs', '.html', '.bc'];
+
+if (!moduleOutputExtensions.includes(Path.extname(program.outputFile).toLowerCase())) {
+    if (fs.existsSync(program.outputFile) && !fs.statSync(program.outputFile).isDirectory()) {
+        console.log(`Output directory ${program.outputFile} exists and is not a directory`);
+        process.exit(1);
+    }
+
+    helpers.mkdirpSync(program.outputFile);
     program.outputFile = Path.join(program.outputFile, Path.basename(inputDir) + '.js');
 }
 

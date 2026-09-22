@@ -1,0 +1,7 @@
+{
+  "name": "test-t6-https",
+  "compiler-args": [
+    "-include",
+    "mbed-target-config.h"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+    "name": "https",
+    "timeoutMs": 300000,
+    "steps": [
+        {
+            "name": "HTTPS GET response retrieved (TLS certificate verified)",
+            "timeoutMs": 120000,
+            "assert": {
+                "type": "serial",
+                "regex": "----- HTTPS GET response -----"
+            }
+        },
+        {
+            "name": "GET answered 200 OK",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "Status: 200 - OK"
+            }
+        },
+        {
+            "name": "GET response body came back over TLS",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "\"url\":\\s*\"https://postman-echo\\.com/get\""
+            }
+        },
+        {
+            "name": "HTTPS POST response retrieved",
+            "timeoutMs": 120000,
+            "assert": {
+                "type": "serial",
+                "regex": "----- HTTPS POST response -----"
+            }
+        },
+        {
+            "name": "POST reached the server (response echoes the POST url)",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "\"url\":\\s*\"https://postman-echo\\.com/post\""
+            }
+        },
+        {
+            "name": "POST body survived the TLS session (server echoed it back)",
+            "timeoutMs": 60000,
+            "assert": {
+                "type": "serial",
+                "regex": "\\{\\s*\"hello\"\\s*:\\s*\"world\"\\s*\\}"
+            }
+        },
+        {
+            "name": "the page is still alive after the HTTPS exchanges (HAL read answers)",
+            "timeoutMs": 30000,
+            "read": {
+                "gpio": "LED1"
+            }
+        }
+    ]
+}

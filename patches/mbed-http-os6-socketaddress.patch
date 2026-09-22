@@ -59,3 +59,73 @@ index 7f2c5a5..77dd326 100644
  };
  
  #endif // _HTTP_REQUEST_
+diff --git a/source/https_request.h b/source/https_request.h
+index d5335dd..a8db725 100644
+--- a/source/https_request.h
++++ b/source/https_request.h
+@@ -50,7 +50,7 @@ public:
+                  http_method method,
+                  const char* url,
+                  Callback<void(const char *at, uint32_t length)> body_callback = 0)
+-        : HttpRequestBase(NULL, body_callback)
++        : HttpRequestBase(NULL, body_callback), _network(network)
+     {
+         _parsed_url = new ParsedUrl(url);
+         _request_builder = new HttpRequestBuilder(method, _parsed_url);
+@@ -77,7 +77,7 @@ public:
+                  http_method method,
+                  const char* url,
+                  Callback<void(const char *at, uint32_t length)> body_callback = 0)
+-        : HttpRequestBase(socket, body_callback)
++        : HttpRequestBase(socket, body_callback), _network(NULL)
+     {
+         _parsed_url = new ParsedUrl(url);
+         _body_callback = body_callback;
+@@ -90,9 +90,46 @@ public:
+     virtual ~HttpsRequest() {}
+ 
+ protected:
++
++    /**
++     * Connect the TLS socket to <host>:<port>.
++     *
++     * Mbed OS 6 removed Socket::connect(const char *host, uint16_t port), so the
++     * host is resolved through a NetworkInterface and the socket then connects
++     * to the resulting SocketAddress. The interface the request was created with
++     * is used when the caller supplied one (a caller-supplied socket falls back
++     * to the default interface of the system).
++     *
++     * The name is handed to the TLS socket *before* the handshake: it travels in
++     * the ClientHello (SNI, which a shared front end needs to pick the right
++     * certificate) and it is what the certificate host-name check compares
++     * against. Without it a public server may still complete a handshake, so
++     * leaving it out would silently drop host-name verification.
++     */
+     virtual nsapi_error_t connect_socket(char *host, uint16_t port) {
+-        return ((TLSSocket*)_socket)->connect(host, port);
++        NetworkInterface *network = _network ? _network : NetworkInterface::get_default_instance();
++        if (network == NULL) {
++            return NSAPI_ERROR_NO_CONNECTION;
++        }
++
++        TLSSocket *socket = (TLSSocket*)_socket;
++        socket->set_hostname(host);
++
++        SocketAddress address;
++        nsapi_error_t err = network->gethostbyname(host, &address);
++        if (err != NSAPI_ERROR_OK) {
++            return err;
++        }
++
++        address.set_port(port);
++
++        return socket->connect(address);
+     }
++
++private:
++
++    /** Network interface this request opens its TLS socket on (NULL for a caller-supplied socket) */
++    NetworkInterface *_network;
+ };
+ 
+ #endif // _MBED_HTTPS_REQUEST_H_
