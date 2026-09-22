@@ -33,8 +33,13 @@ int main() {
     // but you can directly defer it to the thread that runs the queue
     btn.fall(queue.event(&btn_fall));
 
-    // Because the simulator does not support multiple threads,
-    // we have to call dispatch_forever from the main thread.
-    // Typically you'd run this on a separate thread within Mbed's RTOS.
-    queue.dispatch_forever();
+    // There is no RTOS in the simulator, so the queue cannot be parked with a
+    // blocking call: dispatch_forever() waits for events through the timer
+    // machinery and the browser's event loop never runs again, which makes the
+    // button (and every other input) unreachable. Dispatch what is pending,
+    // then yield, forever.
+    while (true) {
+        queue.dispatch(0);
+        ThisThread::sleep_for(1ms);
+    }
 }

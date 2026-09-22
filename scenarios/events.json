@@ -1,6 +1,6 @@
 {
     "name": "events",
-    "timeoutMs": 30000,
+    "timeoutMs": 40000,
     "steps": [
         {
             "name": "EventQueue::call_every(1s) dispatches repeatedly",
@@ -8,6 +8,50 @@
             "assert": {
                 "type": "serial",
                 "regex": "blink_led invoked"
+            }
+        },
+        {
+            "name": "the scheduled callback toggles LED1 on the board (a page read: the page must be alive while the queue is parked)",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "LED1",
+                "samples": 5,
+                "intervalMs": 500,
+                "distinctAtLeast": 2
+            }
+        },
+        {
+            "name": "press BUTTON1",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 1
+            }
+        },
+        {
+            "name": "release BUTTON1 - the InterruptIn falling edge",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 0
+            }
+        },
+        {
+            "name": "the deferred handler ran on the queue (not in the ISR)",
+            "timeoutMs": 10000,
+            "assert": {
+                "type": "serial",
+                "regex": "btn_fall invoked"
+            }
+        },
+        {
+            "name": "and its LED2 toggle is visible on the board",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "LED2",
+                "samples": 5,
+                "intervalMs": 100,
+                "someExpect": 1
             }
         }
     ]

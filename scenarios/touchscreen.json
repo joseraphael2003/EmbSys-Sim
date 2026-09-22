@@ -1,0 +1,148 @@
+{
+    "name": "touchscreen",
+    "timeoutMs": 60000,
+    "steps": [
+        {
+            "name": "the demo boots",
+            "assert": {
+                "type": "serial",
+                "substring": "Draw on the screen!"
+            }
+        },
+        {
+            "name": "let the boot-time LCD painting finish",
+            "wait": 3000
+        },
+        {
+            "name": "the panel is painted and the touch point is still untouched",
+            "timeoutMs": 5000,
+            "read": {
+                "canvas": "#components .component.st7789h2 canvas",
+                "pixel": [120, 120],
+                "samples": 5,
+                "intervalMs": 200,
+                "expect": "255,255,255"
+            }
+        },
+        {
+            "name": "touch the panel at (120, 120)",
+            "timeoutMs": 10000,
+            "action": {
+                "component": "ST7789H2",
+                "selector": "canvas",
+                "interaction": "press",
+                "at": [120, 120]
+            }
+        },
+        {
+            "name": "the demo drew at the touched coordinate",
+            "timeoutMs": 15000,
+            "read": {
+                "canvas": "#components .component.st7789h2 canvas",
+                "pixel": [120, 120],
+                "samples": 20,
+                "intervalMs": 200,
+                "someExpect": "255,0,0"
+            }
+        },
+        {
+            "name": "the drawn pixel stays drawn",
+            "timeoutMs": 5000,
+            "read": {
+                "canvas": "#components .component.st7789h2 canvas",
+                "pixel": [120, 120],
+                "expect": "255,0,0"
+            }
+        },
+        {
+            "name": "release the touch",
+            "timeoutMs": 5000,
+            "action": {
+                "component": "ST7789H2",
+                "selector": "canvas",
+                "interaction": "release",
+                "at": [120, 120]
+            }
+        },
+        {
+            "name": "the second touch point is white before the second touch",
+            "timeoutMs": 5000,
+            "read": {
+                "canvas": "#components .component.st7789h2 canvas",
+                "pixel": [60, 180],
+                "expect": "255,255,255"
+            }
+        },
+        {
+            "name": "touch a second, different coordinate",
+            "timeoutMs": 10000,
+            "action": {
+                "component": "ST7789H2",
+                "selector": "canvas",
+                "interaction": "press",
+                "at": [60, 180]
+            }
+        },
+        {
+            "name": "the second touch drew at its own coordinate only",
+            "timeoutMs": 15000,
+            "read": {
+                "canvas": "#components .component.st7789h2 canvas",
+                "pixel": [60, 180],
+                "samples": 20,
+                "intervalMs": 200,
+                "someExpect": "255,0,0"
+            }
+        },
+        {
+            "name": "a coordinate that was never touched is untouched",
+            "timeoutMs": 5000,
+            "read": {
+                "canvas": "#components .component.st7789h2 canvas",
+                "pixel": [200, 120],
+                "expect": "255,255,255"
+            }
+        },
+        {
+            "name": "release the second touch",
+            "timeoutMs": 5000,
+            "action": {
+                "component": "ST7789H2",
+                "selector": "canvas",
+                "interaction": "release",
+                "at": [60, 180]
+            }
+        },
+        {
+            "name": "a press that never reaches the panel (the component's caption) draws nothing",
+            "timeoutMs": 10000,
+            "action": {
+                "component": "ST7789H2",
+                "interaction": "press",
+                "at": [10, 10]
+            }
+        },
+        {
+            "name": "letting the application run on after that press",
+            "wait": 2000
+        },
+        {
+            "name": "an untouched coordinate is still untouched after the non-panel press",
+            "timeoutMs": 5000,
+            "read": {
+                "canvas": "#components .component.st7789h2 canvas",
+                "pixel": [200, 60],
+                "expect": "255,255,255"
+            }
+        },
+        {
+            "name": "release that press",
+            "timeoutMs": 5000,
+            "action": {
+                "component": "ST7789H2",
+                "interaction": "release",
+                "at": [10, 10]
+            }
+        }
+    ]
+}

@@ -26,7 +26,7 @@ program
     .option('-c --compiler-opts <opts>', 'Compiler options (e.g. -std=c++11)')
     .option('-l --launch', 'Launch the simulator for this project after building (opens a browser)')
     .option('--launch-headless',  'Launch the simulator for this project after building in headless mode (pipes output to console)')
-    .option('--scenario <file>', 'JSON assertion scenario to run in headless mode (steps: assert / read / action / wait)')
+    .option('--scenario <file>', 'JSON assertion scenario to run in headless mode (steps: assert / read / action / reload / wait)')
     .option('--skip-build', 'Skip the build step (launch only)')
     .option('--disable-runtime-logs', 'Disable runtime logs (e.g. from the LoRa server or networking proxy)')
     .allowUnknownOption(true)
@@ -220,6 +220,7 @@ function serialPass(spec, buffer) {
 //   { gpio: '<PINNAME>', aspect: 'period_us' }  => PWM period, microseconds
 //   { component: 'led'|'Switch', label?: ... }  => 1 when the component is "on"
 //   { canvas: '<selector>' }                    => pixels drawn on a rendered display
+//   { canvas: '<selector>', pixel: [x, y] }     => that pixel's colour, "r,g,b"
 async function readSample(page, spec) {
     if (spec.gpio !== undefined) {
         return await page.evaluate((s) => {
@@ -249,6 +250,23 @@ async function readSample(page, spec) {
         }, spec);
     }
     if (spec.canvas !== undefined) {
+        if (spec.pixel !== undefined) {
+            // One pixel's colour, for scenarios that assert *where* the
+            // application drew (the touchscreen demo fills a circle at the
+            // reported touch position) rather than only that something was
+            // drawn: the whole-canvas count below has a huge baseline on any
+            // display that is painted at boot. Out-of-range coordinates are a
+            // miss, not a transparent-black reading, so a bad spec fails the
+            // step instead of comparing equal to something.
+            return await page.evaluate((s) => {
+                const el = document.querySelector(s.canvas);
+                if (!el || typeof el.getContext !== 'function') return null;
+                const [x, y] = s.pixel;
+                if (!(x >= 0 && y >= 0 && x < el.width && y < el.height)) return null;
+                const d = el.getContext('2d').getImageData(x, y, 1, 1).data;
+                return `${d[0]},${d[1]},${d[2]}`;
+            }, spec);
+        }
         // A rendered display is a canvas that starts as one uniform background
         // colour; everything the application drew differs from the first pixel.
         return await page.evaluate((selector) => {
@@ -324,6 +342,9 @@ function readProblems(spec, value) {
 //   { gpio: '<PINNAME>', set: 0|1 }                          peripheral write
 //   { component: 'switch'|..., label?, selector?, value }     set a control (range input) and fire change
 //   { component: 'switch'|..., label?, selector?, interaction: 'press'|'release'|'click', holdMs? }
+//   ...plus `at: [x, y]` on an interaction to send REAL pointer input to that
+//   coordinate inside the target (needed by handlers that read the event's own
+//   position).
 // `selector` targets an element *inside* the component (e.g. the SHT31
 // thermometer bars, the potentiometer's range input), which is where several
 // components attach their handlers. Returns false when the target could not be
@@ -334,6 +355,50 @@ async function performAction(page, spec) {
         return true;
     }
     if (spec.component !== undefined && (spec.interaction !== undefined || spec.value !== undefined)) {
+        if (spec.at !== undefined) {
+            // `at` dispatches REAL pointer input at a coordinate inside the
+            // target, through the browser's input pipeline. A synthetic
+            // MouseEvent cannot carry a position (pageX/X are 0 unless the
+            // event is trusted), and a handler that derives its coordinate
+            // from the event - the BSP touch canvas does
+            // `event.pageX - canvas.offsetLeft` - would receive a garbage
+            // (negative) position. The dispatch point is computed with the
+            // same arithmetic the handler performs, and the hit test is
+            // verified in-page so a point that lands on nothing (outside the
+            // viewport, covered by another element) fails the step instead of
+            // silently driving the wrong element.
+            const point = await page.evaluate((s) => {
+                const want = s.label !== undefined ? s.label : s.component;
+                const els = Array.prototype.slice.call(document.querySelectorAll('#components .component'));
+                const el = els.find((e) => {
+                    if (e.classList.contains(want)) return true;
+                    const d = e.querySelector('.description');
+                    return !!d && d.textContent.toLowerCase().indexOf(String(want).toLowerCase()) !== -1;
+                });
+                if (!el) return null;
+                const target = s.selector ? el.querySelector(s.selector) : el;
+                if (!target) return null;
+
+                target.scrollIntoView({ block: 'center', inline: 'center' });
+
+                const x = target.offsetLeft + s.at[0] - window.scrollX;
+                const y = target.offsetTop + s.at[1] - window.scrollY;
+                const hit = document.elementFromPoint(x, y);
+                if (!hit || !(hit === target || target.contains(hit))) return null;
+                return { x: x, y: y };
+            }, spec);
+            if (!point) return false;
+
+            await page.mouse.move(point.x, point.y);
+            if (spec.interaction === 'press') await page.mouse.down();
+            else if (spec.interaction === 'release') await page.mouse.up();
+            else {
+                await page.mouse.down();
+                await page.mouse.up();
+            }
+            return true;
+        }
+
         return await page.evaluate((s) => {
             const want = s.label !== undefined ? s.label : s.component;
             const els = Array.prototype.slice.call(document.querySelectorAll('#components .component'));
@@ -374,10 +439,31 @@ async function performAction(page, spec) {
 }
 
 // A single scenario step. Returns { passed, detail }.
-async function runScenarioStep(page, step, scenario, failures, serialLines) {
+async function runScenarioStep(page, step, scenario, failures, serialLines, startTs) {
     const stepTimeout = typeof step.timeoutMs === 'number' ? step.timeoutMs : scenario.timeoutMs;
     const deadline = Date.now() + stepTimeout;
-    const label = step.name || (step.assert ? 'assert' : step.read ? 'read' : step.action ? 'action' : step.wait ? 'wait' : 'step');
+    const label = step.name || (step.assert ? 'assert' : step.read ? 'read' : step.action ? 'action' : step.reload ? 'reload' : step.wait ? 'wait' : 'step');
+
+    // reload — re-enter the application from a fresh document. This is the only
+    // way to observe state a demo persists outside the wasm heap (the bd demo's
+    // block device lives in the browser's local storage), so a scenario can
+    // prove a write was stored and is read back at boot rather than only that
+    // the write call returned. The step is self-verifying: it returns only once
+    // the NEW document has actually re-entered wasm, so the steps after it
+    // cannot be satisfied by the previous run's output (the serial buffer is
+    // accumulated across the reload, by design - it is the evidence trail - and
+    // an assertion that matches pre-reload text alone would pass without the
+    // page ever having reloaded).
+    if (step.reload) {
+        const startedBefore = startTs.count;
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        while (Date.now() < deadline && startTs.count === startedBefore) {
+            await sleep(50);
+        }
+        return startTs.count > startedBefore
+            ? { passed: true, detail: `${label}: reloaded, application restarted` }
+            : { passed: false, detail: `${label}: application did not restart within ${stepTimeout}ms` };
+    }
 
     // assert — poll until the predicate holds or the step times out.
     if (step.assert) {
@@ -442,7 +528,7 @@ async function runScenario(page, browser, scenario, startTs, failures, serialLin
 
     for (let i = 0; i < scenario.steps.length; i++) {
         const step = scenario.steps[i];
-        const res = await runScenarioStep(page, step, scenario, failures, serialLines);
+        const res = await runScenarioStep(page, step, scenario, failures, serialLines, startTs);
         if (!res.passed) {
             await finishHeadless(browser, false, step.name || `step-${i + 1}`, res.detail, Date.now() - startTs.value, serialLines);
         }
@@ -508,7 +594,7 @@ fn(program.inputDir || program.inputFile, program.outputFile, extraArgs, program
                     browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
                     const page = await browser.newPage();
 
-                    const startTs = { value: null };    // Date.now() when onStartExecution fired
+                    const startTs = { value: null, count: 0 };    // Date.now() when onStartExecution fired (+ how many times it started)
                     const failures = { value: null };   // message from onFailedExecution, if any
                     const serialLines = [];             // every onPrintEvent chunk (timestamped relative to start)
                     const serialStamps = [];            // Date.now() per serial chunk
@@ -521,6 +607,7 @@ fn(program.inputDir || program.inputFile, program.outputFile, extraArgs, program
                         }
                     });
                     await page.exposeFunction('onStartExecution', () => {
+                        startTs.count++;
                         if (startTs.value === null) {
                             startTs.value = Date.now();
                         }

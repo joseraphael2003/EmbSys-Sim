@@ -42,7 +42,7 @@ int SimulatorBlockDevice::init()
     uint32_t size = static_cast<uint32_t>(_count * _read_size);
 
     EM_ASM_({
-        window.MbedJSHal.blockdevice.init(Pointer_stringify($0), $1);
+        window.MbedJSHal.blockdevice.init(UTF8ToString($0), $1);
     }, _key_name, size);
 
     return BD_ERROR_OK;
@@ -78,6 +78,11 @@ bd_size_t SimulatorBlockDevice::size() const
     return _count * _erase_size;
 }
 
+const char *SimulatorBlockDevice::get_type() const
+{
+    return "SIMULATOR";
+}
+
 int SimulatorBlockDevice::read(void *b, bd_addr_t addr, bd_size_t size)
 {
     MBED_ASSERT(is_valid_read(addr, size));
@@ -87,7 +92,7 @@ int SimulatorBlockDevice::read(void *b, bd_addr_t addr, bd_size_t size)
     size_t size_32 = static_cast<uint32_t>(size);
 
     EM_ASM_({
-        window.MbedJSHal.blockdevice.read(Pointer_stringify($0), $1, $2, $3);
+        window.MbedJSHal.blockdevice.read(UTF8ToString($0), $1, $2, $3);
     }, _key_name, buffer, addr_32, size_32);
 
     return 0;
@@ -102,7 +107,7 @@ int SimulatorBlockDevice::program(const void *b, bd_addr_t addr, bd_size_t size)
     size_t size_32 = static_cast<uint32_t>(size);
 
     EM_ASM_({
-        window.MbedJSHal.blockdevice.program(Pointer_stringify($0), $1, $2, $3);
+        window.MbedJSHal.blockdevice.program(UTF8ToString($0), $1, $2, $3);
     }, _key_name, buffer, addr_32, size_32);
 
     return 0;
@@ -117,7 +122,7 @@ int SimulatorBlockDevice::erase(bd_addr_t addr, bd_size_t size)
     size_t size_32 = static_cast<uint32_t>(size);
 
     EM_ASM_({
-        window.MbedJSHal.blockdevice.erase(Pointer_stringify($0), $1, $2);
+        window.MbedJSHal.blockdevice.erase(UTF8ToString($0), $1, $2);
     }, _key_name, addr_32, size_32);
 
     return 0;

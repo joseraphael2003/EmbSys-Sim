@@ -358,6 +358,33 @@ const COMPONENTS = [
         ],
     },
     {
+        // CE's abstract block-device interface (mbed::BlockDevice,
+        // bd_size_t/bd_addr_t, BD_ERROR_*). Header-only in this build: every
+        // simulator block-device user (simblockdevice/SimulatorBlockDevice,
+        // and through it the bd and peliondm demos) derives from the interface
+        // and drives it directly, so only the include roots are needed. The
+        // concrete drivers in storage/blockdevice/source/ are not part of the
+        // closure - they wrap SPI/QSPI/FLASH/I2C hardware the virtual board
+        // does not have, and no wired source references them.
+        name: 'mbed-os:storage-blockdevice',
+        includes: [
+            'mbed-os/storage/blockdevice/include',
+            'mbed-os/storage/blockdevice/include/blockdevice',
+        ],
+    },
+    {
+        // Simulator block device: a BlockDevice that persists to the browser's
+        // local storage through viewer/js-hal/blockdevice.js
+        // (window.MbedJSHal.blockdevice). Backs the bd demo.
+        name: 'simblockdevice',
+        sources: [
+            'simblockdevice',
+        ],
+        includes: [
+            'simblockdevice',
+        ],
+    },
+    {
         // LCD / temperature sensor peripherals (lcd + temperature demos).
         // The js-hal/js-ui directories are JS component roots: they carry no
         // C++ but build-application.js discovers them by name to bundle the
@@ -374,6 +401,40 @@ const COMPONENTS = [
             'peripherals/Sht31',
             'peripherals/Sht31/js-hal',
             'peripherals/Sht31/js-ui',
+        ],
+    },
+    {
+        // STM32F413H-Discovery BSP for the touchscreen demo: the board layer,
+        // its FRIDA LCD (ST7789H2) and touch controller (FT6x06) drivers and
+        // the font tables BSP_LCD_DisplayStringAt blits with. The board layer
+        // is Emscripten-native - every panel access goes through
+        // window.MbedJSHal.ST7789H2 (this directory's js-hal), which the js-ui
+        // component in the same directory renders to a canvas and feeds touch
+        // coordinates back from. Both JS roots are include roots so
+        // build-application.js discovers and bundles them. The audio codec
+        // driver (Drivers/BSP/Components/wm8994) and the QSPI flash header are
+        // not in the closure: no wired consumer, and no matching peripheral on
+        // the virtual board.
+        name: 'peripherals:BSP_DISCO_F413ZH',
+        files: [
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/STM32F413H-Discovery/stm32f413h_discovery.c',
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/STM32F413H-Discovery/stm32f413h_discovery_lcd.c',
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/STM32F413H-Discovery/stm32f413h_discovery_ts.c',
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/Components/ft6x06/ft6x06.c',
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/Components/st7789h2/st7789h2.c',
+            'peripherals/BSP_DISCO_F413ZH/Utilities/Fonts/font8.c',
+            'peripherals/BSP_DISCO_F413ZH/Utilities/Fonts/font12.c',
+            'peripherals/BSP_DISCO_F413ZH/Utilities/Fonts/font16.c',
+            'peripherals/BSP_DISCO_F413ZH/Utilities/Fonts/font20.c',
+            'peripherals/BSP_DISCO_F413ZH/Utilities/Fonts/font24.c',
+        ],
+        includes: [
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/STM32F413H-Discovery',
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/Components/ft6x06',
+            'peripherals/BSP_DISCO_F413ZH/Drivers/BSP/Components/st7789h2',
+            'peripherals/BSP_DISCO_F413ZH/Utilities/Fonts',
+            'peripherals/BSP_DISCO_F413ZH/js-hal',
+            'peripherals/BSP_DISCO_F413ZH/js-ui',
         ],
     },
     {
@@ -415,21 +476,6 @@ const NOT_YET_PORTED = [
         sourceRoot: 'mbed-os/connectivity/lorawan',
         task: 'T5/T7 (lorawan + lorawan-abp demos)',
         reason: 'compiles only with the MBED_CONF_LORA_* config defines and the lorastack include roots the CE config generator produces',
-    },
-    {
-        sourceRoot: 'mbed-os/storage/blockdevice',
-        task: 'T7 (bd demo)',
-        reason: 'CE BlockDevice component (storage/blockdevice/include/blockdevice/BlockDevice.h) is required by simblockdevice',
-    },
-    {
-        sourceRoot: 'simblockdevice',
-        task: 'T7 (bd demo)',
-        reason: 'SimulatorBlockDevice needs CE storage/blockdevice + FATFileSystem components',
-    },
-    {
-        sourceRoot: 'peripherals/BSP_DISCO_F413ZH',
-        task: 'T7 (touchscreen demo)',
-        reason: 'stm32f413h_discovery_ts.c calls the removed OS5 wait_ms()',
     },
     {
         sourceRoot: 'lora-radio-drv',

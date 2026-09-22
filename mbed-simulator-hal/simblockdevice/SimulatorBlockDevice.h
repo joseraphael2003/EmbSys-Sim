@@ -124,6 +124,15 @@ public:
      */
     virtual bd_size_t size() const;
 
+    /** Get the BlockDevice class type
+     *
+     *  Mbed CE's BlockDevice declares get_type() pure virtual, so every
+     *  concrete block device must name itself.
+     *
+     *  @return         A string representing the BlockDevice class type
+     */
+    virtual const char *get_type() const;
+
 private:
     const char *_key_name;
     bd_size_t _read_size;

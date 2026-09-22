@@ -65,7 +65,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f413h_discovery.h"
 #include "stm32f413h_discovery_ts.h"
-#include "mbed_wait_api.h"
+#include "platform/mbed_thread.h"
 
 /** @addtogroup BSP
   * @{
@@ -207,23 +207,32 @@ uint8_t BSP_TS_ITConfig(void)
   */
 uint8_t BSP_TS_GetState(TS_StateTypeDef *TS_State)
 {
-  int x = EM_ASM_INT({
-    return window.MbedJSHal.ST7789H2.getTouchX();
-  });
-  int y = EM_ASM_INT({
-    return window.MbedJSHal.ST7789H2.getTouchY();
-  });
+  uint8_t  nbTouch;
+  uint16_t x = 0;
+  uint16_t y = 0;
 
+  TS_State->touchDetected = 0;
+  TS_State->touchX[0] = 0;
+  TS_State->touchY[0] = 0;
 
-  TS_State->touchDetected = x != -1 && y != -1;
-  if (x != -1) {
-    TS_State->touchX[0] = (uint16_t)x;
+  /* Ask the FT6x06 driver how many points are down, then read the first one.
+   * Only the single-touch case is reported: the simulator's panel model
+   * (viewer/js-hal/st7789h2_ft6x06.js) tracks one pointer, and TS_IO_Read in
+   * the board layer answers the registers this driver reads from it. No
+   * orientation transform is applied, because that model already reports
+   * coordinates in the frame the LCD is drawn in. */
+  nbTouch = tsDriver->DetectTouch(I2C_Address);
+
+  if (nbTouch > 0)
+  {
+    tsDriver->GetXY(I2C_Address, &x, &y);
+
+    TS_State->touchDetected = 1;
+    TS_State->touchX[0] = x;
+    TS_State->touchY[0] = y;
   }
-  if (y != -1) {
-    TS_State->touchY[0] = (uint16_t)y;
-  }
 
-  wait_ms(1); // yield back
+  thread_sleep_for(1); // yield back
 
   return TS_OK;
 }

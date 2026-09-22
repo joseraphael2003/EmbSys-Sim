@@ -1,0 +1,81 @@
+{
+    "name": "bd",
+    "timeoutMs": 60000,
+    "steps": [
+        {
+            "name": "the demo boots",
+            "assert": {
+                "type": "serial",
+                "substring": "The Simulator contains a persistent block device implementation"
+            }
+        },
+        {
+            "name": "the boot-time read of a blank device returns data",
+            "assert": {
+                "type": "serial",
+                "regex": "Counter initial value is 0"
+            }
+        },
+        {
+            "name": "press BUTTON1 (first edge)",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 1
+            }
+        },
+        {
+            "name": "release BUTTON1 - the InterruptIn falling edge",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 0
+            }
+        },
+        {
+            "name": "the handler programmed the incremented page",
+            "timeoutMs": 10000,
+            "assert": {
+                "type": "serial",
+                "regex": "Counter is now 1"
+            }
+        },
+        {
+            "name": "press BUTTON1 (second edge)",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 1
+            }
+        },
+        {
+            "name": "release BUTTON1 (second falling edge)",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 0
+            }
+        },
+        {
+            "name": "the second program landed",
+            "timeoutMs": 10000,
+            "assert": {
+                "type": "serial",
+                "regex": "Counter is now 2"
+            }
+        },
+        {
+            "name": "refresh the page (the demo's own persistence claim)",
+            "timeoutMs": 20000,
+            "reload": true
+        },
+        {
+            "name": "the reloaded application's boot-time read returns what was programmed before the refresh",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "Counter initial value is 2"
+            }
+        }
+    ]
+}
