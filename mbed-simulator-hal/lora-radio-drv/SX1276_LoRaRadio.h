@@ -31,7 +31,14 @@ SPDX-License-Identifier: BSD-3-Clause
 #include "DigitalOut.h"
 #include "DigitalInOut.h"
 #include "Timeout.h"
-#include "platform/PlatformMutex.h"
+// Mbed CE removed platform/PlatformMutex.h; upstream's own CHANGELOG says why:
+// "This class was useless because rtos::Mutex is available as a stub in
+// baremetal builds, so there is no need for another layer of abstraction over
+// it." This simulator is a baremetal build (MBED_CONF_RTOS_PRESENT is
+// undefined), so rtos::Mutex is CE's own no-op stub here - the radio driver's
+// lock()/unlock() are correct single-threaded pushes/pops, not a local
+// reinvention of a mutex.
+#include "rtos/Mutex.h"
 #ifdef MBED_CONF_RTOS_PRESENT
  #include "rtos/Thread.h"
 #endif
@@ -238,10 +245,10 @@ public:
     /**
      *  Get radio status
      *
-     *  @param status        Radio status [RF_IDLE, RF_RX_RUNNING, RF_TX_RUNNING]
-     *  @return              Return current radio status
+     *  @return              Return current radio status (radio_state_t:
+     *                       RF_IDLE, RF_RX_RUNNING, RF_TX_RUNNING, RF_CAD)
      */
-    virtual uint8_t get_status(void);
+    virtual radio_state_t get_status(void);
 
     /**
      *  Sets the maximum payload length
@@ -367,6 +374,16 @@ private:
     // for radio module
     radio_settings_t _rf_settings;
 
+    // Driver-private LoRa RX bookkeeping. Mbed CE's radio_lora_settings_t and
+    // radio_lora_packet_handler_t (connectivity/lorawan/include/lorawan/
+    // LoRaRadio.h) no longer carry these three fields, so the state the driver
+    // kept in them lives here instead. They stay out of the upstream structs on
+    // purpose: those structs are the LoRaWAN stack's public radio contract, and
+    // this driver is the only reader and writer of this state.
+    uint16_t _lora_symb_timeout;        // RxSingle timeout, in symbols
+    bool _lora_rx_pending;              // a packet arrived outside RX_RUNNING
+    uint32_t _lora_rx_pending_since_ms; // when that packet arrived (Date.now())
+
     // Structure containing function pointers to the stack callbacks
     radio_events_t *_radio_events;
 
@@ -387,7 +404,7 @@ private:
 #endif
 
     // Access protection
-    PlatformMutex mutex;
+    rtos::Mutex mutex;
 
     uint8_t radio_variant;
 

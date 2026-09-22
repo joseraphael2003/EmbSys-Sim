@@ -105,10 +105,15 @@ int main() {
 
     printf("Connection - In Progress ...\r\n");
 
-    // make your event queue dispatching events forever
-    ev_queue.dispatch_forever();
-
-    return 0;
+    // There is no RTOS in the simulator, so the queue cannot be parked with a
+    // blocking call: dispatch_forever() waits for events through the timer
+    // machinery and the browser's event loop never runs again, which makes the
+    // button (and every other input) unreachable. Dispatch what is pending,
+    // then yield, forever.
+    while (true) {
+        ev_queue.dispatch(0);
+        ThisThread::sleep_for(1ms);
+    }
 }
 
 // This is called from RX_DONE, so whenever a message came in

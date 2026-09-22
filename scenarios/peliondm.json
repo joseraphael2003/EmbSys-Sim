@@ -1,0 +1,32 @@
+{
+    "name": "peliondm",
+    "timeoutMs": 90000,
+    "steps": [
+        {
+            "name": "the demo brings up the simulator's network interface",
+            "timeoutMs": 30000,
+            "assert": {
+                "type": "serial",
+                "regex": "Connected to the network successfully\\. IP address:"
+            }
+        },
+        {
+            "name": "the Pelion client either initialized, or reported the failure code it hit",
+            "timeoutMs": 45000,
+            "assert": {
+                "type": "serial",
+                "regex": "(Pelion Client initialized|Pelion Client initialization failed \\(-?[0-9]+\\))"
+            }
+        },
+        {
+            "name": "the page is alive while the demo is parked in the cooperative loop (a page read: a dead page fails here)",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "LED1",
+                "samples": 3,
+                "intervalMs": 100,
+                "expect": 0
+            }
+        }
+    ]
+}

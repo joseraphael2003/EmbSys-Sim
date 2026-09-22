@@ -196,6 +196,12 @@ SX1276_LoRaRadio::SX1276_LoRaRadio(PinName spi_mosi,
 
     _radio_events = NULL;
 
+    // Driver-private LoRa RX state (see the header: Mbed CE's radio structs no
+    // longer carry these fields).
+    _lora_symb_timeout = 0;
+    _lora_rx_pending = false;
+    _lora_rx_pending_since_ms = 0;
+
     if (tcxo != NC) {
         _tcxo = 1;
     }
@@ -270,7 +276,7 @@ bool SX1276_LoRaRadio::check_rf_frequency(uint32_t frequency)
 /**
  * Returns current status of the radio state machine
  */
-uint8_t SX1276_LoRaRadio::get_status(void)
+radio_state_t SX1276_LoRaRadio::get_status(void)
 {
     return _rf_settings.state;
 }
@@ -369,7 +375,7 @@ void SX1276_LoRaRadio::set_rx_config(radio_modems_t modem, uint32_t bandwidth,
             _rf_settings.lora.hop_period = hop_period;
             _rf_settings.lora.iq_inverted = iq_inverted;
             _rf_settings.lora.rx_continuous = rx_continuous;
-            _rf_settings.lora.symb_timeout = symb_timeout;
+            _lora_symb_timeout = symb_timeout;
 
             if (datarate > 12) {
                 datarate = 12;
@@ -620,12 +626,12 @@ void SX1276_LoRaRadio::rx_frame(uint8_t* data, uint32_t size, uint32_t frequency
     _rf_settings.lora_packet_handler.size = size;
     _rf_settings.lora_packet_handler.rssi_value = -35;
     _rf_settings.lora_packet_handler.snr_value = -5;
-    _rf_settings.lora_packet_handler.pending = true;
-    _rf_settings.lora_packet_handler.timestamp_ms = EM_ASM_INT({ return Date.now(); });
+    _lora_rx_pending = true;
+    _lora_rx_pending_since_ms = EM_ASM_INT({ return Date.now(); });
 
     if (_rf_settings.state == RF_RX_RUNNING) {
         // EM_ASM({ console.log('rf state is RF_RX_RUNNING, gonna call the rx_done_irq') });
-        _rf_settings.lora_packet_handler.pending = false;
+        _lora_rx_pending = false;
         rx_done_irq();
     }
 }
@@ -646,12 +652,12 @@ void SX1276_LoRaRadio::receive()
     _rf_settings.state = RF_RX_RUNNING;
 
     // q:
-    if (_rf_settings.lora_packet_handler.pending) {
-        uint32_t delta_ms = EM_ASM_INT({ return Date.now(); }) - _rf_settings.lora_packet_handler.timestamp_ms;
+    if (_lora_rx_pending) {
+        uint32_t delta_ms = EM_ASM_INT({ return Date.now(); }) - _lora_rx_pending_since_ms;
 
         // tr_debug("receive delta %u ms.", delta_ms);
 
-        _rf_settings.lora_packet_handler.pending = false;
+        _lora_rx_pending = false;
 
         // if (delta_ms > 1000) {
         //     tr_warn("receive delta was over 1000 ms (was %u ms), discarding packet", delta_ms);
@@ -662,10 +668,10 @@ void SX1276_LoRaRadio::receive()
         return;
     }
 
-    if (_rf_settings.lora.symb_timeout != 0) {
+    if (_lora_symb_timeout != 0) {
         rx_timeout_timer.attach_us(
                 callback(this, &SX1276_LoRaRadio::timeout_irq_isr),
-                _rf_settings.lora.symb_timeout * 1e3);
+                _lora_symb_timeout * 1e3);
     }
 }
 
@@ -692,7 +698,9 @@ bool SX1276_LoRaRadio::perform_carrier_sense(radio_modems_t modem,
     set_channel(freq);
 
     // hold on a bit, radio turn-around time
-    wait_ms(1);
+    // (wait_ms() was removed in Mbed OS 6; the cooperative equivalent yields
+    //  to the browser event loop instead of blocking it.)
+    ThisThread::sleep_for(std::chrono::milliseconds(1));
 
     Timer elapsed_time;
     elapsed_time.start();
@@ -818,14 +826,14 @@ void SX1276_LoRaRadio::set_sx1276_variant_type()
 {
     if (_rf_ctrls.ant_switch != NC) {
         _ant_switch.input();
-        wait_ms(1);
+        ThisThread::sleep_for(std::chrono::milliseconds(1));
         if (_ant_switch == 1) {
             radio_variant = SX1276MB1LAS;
         } else {
             radio_variant = SX1276MB1MAS;
         }
         _ant_switch.output();
-        wait_ms(1);
+        ThisThread::sleep_for(std::chrono::milliseconds(1));
     } else {
         radio_variant = SX1276UNDEFINED;
     }

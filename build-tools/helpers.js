@@ -109,6 +109,49 @@ const defaultBuildFlags = [
     // value; without this the CE Callback static assert fires ("F must be
     // TriviallyCopyable").
     '-DMBED_CONF_PLATFORM_CALLBACK_NONTRIVIAL=1',
+    // Mbed CE connectivity/lorawan/mbed_lib.json5 defines the LoRaWAN stack's
+    // parameters; CE's CMake config generator turns them into MBED_CONF_LORA_*
+    // macros. This build has no json5 parser (same situation as
+    // MBED_CRC_TABLE_SIZE above), so the consumed parameters are supplied by
+    // hand at their mbed_lib.json defaults:
+    //
+    //   * PHY and PHY_AS923_SUB_REGION are token-concatenated by the stack
+    //     (lorastack/phy/loraphy_target.h: mbed_lora_concat(MBED_CONF_LORA_PHY)
+    //     -> LORA_REGION_EU868), so they must arrive as bare tokens, never as
+    //     quoted strings; the same for the AS923 sub-region.
+    //   * EUI/key parameters are brace initialisers: the stack pastes them
+    //     straight into `const static uint8_t x[] = MBED_CONF_LORA_...;`.
+    //   * MBED_CONF_LORA_DWELL_TIME is deliberately NOT defined: it is not a
+    //     parameter of mbed_lib.json, so the CE generator emits nothing either,
+    //     and LoRaPHYAS923.cpp's `#if (MBED_CONF_LORA_DWELL_TIME == 0)` then
+    //     selects the same no-dwell-time payload table CE ships by default.
+    //   * MBED_CONF_LORA_LBT_ON is likewise omitted: it IS a mbed_lib.json
+    //     parameter, but no translation unit in the pinned revision reads it
+    //     (grep for it finds only the json), so defining it would be dead
+    //     weight rather than configuration.
+    '-DMBED_CONF_LORA_PHY=EU868',
+    '-DMBED_CONF_LORA_PHY_AS923_SUB_REGION=AS1',
+    '-DMBED_CONF_LORA_OVER_THE_AIR_ACTIVATION=1',
+    '-DMBED_CONF_LORA_NB_TRIALS=12',
+    '-DMBED_CONF_LORA_DEVICE_EUI={0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}',
+    '-DMBED_CONF_LORA_APPLICATION_EUI={0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}',
+    '-DMBED_CONF_LORA_APPLICATION_KEY={0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}',
+    '-DMBED_CONF_LORA_DEVICE_ADDRESS=0x00000000',
+    '-DMBED_CONF_LORA_NWKSKEY={0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}',
+    '-DMBED_CONF_LORA_APPSKEY={0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}',
+    '-DMBED_CONF_LORA_APP_PORT=15',
+    '-DMBED_CONF_LORA_TX_MAX_SIZE=64',
+    '-DMBED_CONF_LORA_ADR_ON=1',
+    '-DMBED_CONF_LORA_PUBLIC_NETWORK=1',
+    '-DMBED_CONF_LORA_DUTY_CYCLE_ON=1',
+    '-DMBED_CONF_LORA_DUTY_CYCLE_ON_JOIN=1',
+    '-DMBED_CONF_LORA_AUTOMATIC_UPLINK_MESSAGE=1',
+    '-DMBED_CONF_LORA_MAX_SYS_RX_ERROR=5',
+    '-DMBED_CONF_LORA_WAKEUP_TIME=5',
+    '-DMBED_CONF_LORA_DOWNLINK_PREAMBLE_LENGTH=5',
+    '-DMBED_CONF_LORA_UPLINK_PREAMBLE_LENGTH=8',
+    '-DMBED_CONF_LORA_FSB_MASK={0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x00FF}',
+    '-DMBED_CONF_LORA_FSB_MASK_CHINA={0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF}',
     '-DMBEDTLS_CONFIG_FILE=\"simulator_mbedtls_config.h\"',
     '-DMBED_CONF_PLATFORM_STDIO_CONVERT_NEWLINES=1',
     '-DMBED_CONF_MBED_TRACE_ENABLE=1',

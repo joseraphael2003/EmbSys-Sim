@@ -1,0 +1,24 @@
+{
+    "name": "lorawan-abp",
+    "timeoutMs": 40000,
+    "steps": [
+        {
+            "name": "the demo runs and reports that its credentials are still the placeholders it ships with",
+            "timeoutMs": 25000,
+            "assert": {
+                "type": "serial",
+                "substring": "Set your LoRaWAN credentials first!"
+            }
+        },
+        {
+            "name": "the page is alive after main() returned (a page read: a dead page fails here)",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "LED1",
+                "samples": 3,
+                "intervalMs": 100,
+                "expect": 0
+            }
+        }
+    ]
+}

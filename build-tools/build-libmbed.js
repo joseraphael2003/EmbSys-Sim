@@ -458,6 +458,49 @@ const COMPONENTS = [
         ],
     },
     {
+        // Mbed CE's LoRaWAN stack: the MAC, the regional PHY layer, the
+        // LoRaWANInterface/Stack the demos instantiate, and the stack's timer.
+        // Source set and include roots mirror connectivity/lorawan's own
+        // CMakeLists.txt (lorastack/, system/, source/, plus the four PUBLIC
+        // include roots); connectivity/ is on the path because the PHY headers
+        // include themselves as "lorawan/lorastack/phy/...".
+        //
+        // The MBED_CONF_LORA_* macros this tree needs are supplied by hand in
+        // helpers.defaultBuildFlags (this build has no json5 config
+        // generator); loraphy_target.h hard-errors without MBED_CONF_LORA_PHY.
+        name: 'mbed-os:lorawan',
+        sources: [
+            'mbed-os/connectivity/lorawan/lorastack/mac',
+            'mbed-os/connectivity/lorawan/lorastack/phy',
+            'mbed-os/connectivity/lorawan/source',
+            'mbed-os/connectivity/lorawan/system',
+        ],
+        includes: [
+            'mbed-os/connectivity',
+            'mbed-os/connectivity/lorawan',
+            'mbed-os/connectivity/lorawan/include',
+            'mbed-os/connectivity/lorawan/include/lorawan',
+            'mbed-os/connectivity/lorawan/lorastack',
+            'mbed-os/connectivity/lorawan/lorastack/mac',
+            'mbed-os/connectivity/lorawan/lorastack/phy',
+            'mbed-os/connectivity/lorawan/system',
+        ],
+    },
+    {
+        // The SX1276 radio driver the lorawan demos instantiate. Vendored by
+        // the simulator and ported to Mbed CE (PlatformMutex -> rtos::Mutex,
+        // the removed wait_ms() -> ThisThread::sleep_for). SX1272_LoRaRadio.h
+        // is a header-only sibling nothing references, so the directory is
+        // walked for sources like any other fully-in-closure root.
+        name: 'lora-radio-drv',
+        sources: [
+            'lora-radio-drv',
+        ],
+        includes: [
+            'lora-radio-drv',
+        ],
+    },
+    {
         // Root of the HAL tree: MBEDTLS_CONFIG_FILE and the vendored library
         // headers are resolved relative to it (simulator_mbedtls_config.h).
         name: 'mbed-simulator-hal',
@@ -472,16 +515,6 @@ const COMPONENTS = [
 // task that owns the port) so the graph stays complete and auditable; they
 // contribute no sources/includes until they are wired into COMPONENTS above.
 const NOT_YET_PORTED = [
-    {
-        sourceRoot: 'mbed-os/connectivity/lorawan',
-        task: 'T5/T7 (lorawan + lorawan-abp demos)',
-        reason: 'compiles only with the MBED_CONF_LORA_* config defines and the lorastack include roots the CE config generator produces',
-    },
-    {
-        sourceRoot: 'lora-radio-drv',
-        task: 'T7 (lorawan demos)',
-        reason: 'SX1276_LoRaRadio.h includes the removed platform/PlatformMutex.h',
-    },
     {
         sourceRoot: 'simple-mbed-cloud-client',
         task: 'T7 (peliondm demo)',

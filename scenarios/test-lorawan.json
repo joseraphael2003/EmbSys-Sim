@@ -1,0 +1,88 @@
+{
+    "name": "test-lorawan",
+    "timeoutMs": 60000,
+    "steps": [
+        {
+            "name": "the radio driver was constructed as a global and its CE get_status() contract answers",
+            "timeoutMs": 25000,
+            "assert": {
+                "type": "serial",
+                "regex": "LORA-FIXTURE:radio-status (-?[0-9]+)"
+            }
+        },
+        {
+            "name": "LoRaWANInterface::initialize() accepted the stack with the event queue",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "substring": "LORA-FIXTURE:init 0"
+            }
+        },
+        {
+            "name": "the application callbacks were registered on the stack",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "substring": "LORA-FIXTURE:callbacks-added"
+            }
+        },
+        {
+            "name": "the OTAA join was handed to the stack (OK or CONNECT_IN_PROGRESS, not an error)",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "LORA-FIXTURE:connect -?[0-9]+"
+            }
+        },
+        {
+            "name": "main() reached the cooperative park loop",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "substring": "LORA-FIXTURE:parked"
+            }
+        },
+        {
+            "name": "the page is alive while main() is parked in the cooperative loop (a page read: a dead page fails here)",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "LED1",
+                "samples": 3,
+                "intervalMs": 100,
+                "expect": 0
+            }
+        },
+        {
+            "name": "press BUTTON1 - the InterruptIn falling edge the fixtures' send_message is attached to",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 1
+            }
+        },
+        {
+            "name": "release BUTTON1",
+            "timeoutMs": 10000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 0
+            }
+        },
+        {
+            "name": "the demo's own send_message() body ran (temperature read + upload attempt)",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "LORA-FIXTURE:send-attempt [0-9]+ bytes"
+            }
+        },
+        {
+            "name": "and the LoRaWAN stack answered with a status code rather than aborting",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "LORA-FIXTURE:send-code -?[0-9]+"
+            }
+        }
+    ]
+}

@@ -130,11 +130,14 @@ int main() {
 
     mbed_event_queue()->call_every(1ms, &eventOS_scheduler_run_until_idle);
 
-    mbed_event_queue()->dispatch_forever();
-
-    // There is no RTOS in the simulator: park the main thread in cooperative
-    // sleeps instead of returning from main.
+    // There is no RTOS in the simulator, so the queue cannot be parked with a
+    // blocking call: dispatch_forever() waits for events through the timer
+    // machinery and the browser's event loop never runs again, which makes
+    // every input (and the 5s button ticker above) unreachable. Dispatch what
+    // is pending, then yield, forever. The eventOS_scheduler_run_until_idle
+    // callback scheduled just above keeps running on this same queue.
     while (true) {
-        ThisThread::sleep_for(1s);
+        mbed_event_queue()->dispatch(0);
+        ThisThread::sleep_for(1ms);
     }
 }
