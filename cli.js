@@ -205,6 +205,16 @@ function serialPass(spec, buffer) {
     return false;
 }
 
+// NOTE on component lookup: read and action specs name a `#components` element
+// either by class (`led`, `Switch`, `Potentiometer`) or by the label the
+// component shows, so both match against the class list *and* the description
+// text (case-insensitively). The predicate has to run inside the page, so it
+// appears once in readSample() and once in performAction(); both report a miss
+// to their caller, which fails the step - an action that silently does nothing
+// would otherwise "pass" without acting (that is what made the temperature
+// scenario look like a substrate bug while it was dispatching at the wrong
+// component).
+
 // Read one value from a peripheral/component on the viewer page.
 //   { gpio: '<PINNAME>' }                       => pin state (0/1) or PWM duty (0..1024)
 //   { gpio: '<PINNAME>', aspect: 'period_us' }  => PWM period, microseconds
@@ -219,10 +229,12 @@ async function readSample(page, spec) {
     }
     if (spec.component !== undefined) {
         return await page.evaluate((s) => {
+            const want = s.label !== undefined ? s.label : s.component;
             const els = Array.prototype.slice.call(document.querySelectorAll('#components .component'));
             const el = els.find((e) => {
+                if (e.classList.contains(want)) return true;
                 const d = e.querySelector('.description');
-                return !!d && (!s.label || d.textContent.indexOf(s.label) !== -1);
+                return !!d && d.textContent.toLowerCase().indexOf(String(want).toLowerCase()) !== -1;
             });
             if (!el) return null;
             const img = el.querySelector('img');
@@ -283,6 +295,9 @@ function readProblems(spec, value) {
     if (spec.expect !== undefined && !values.every((v) => v === spec.expect)) {
         problems.push(`expected ${spec.expect}, got ${JSON.stringify(value)}`);
     }
+    if (spec.someExpect !== undefined && !values.some((v) => v === spec.someExpect)) {
+        problems.push(`expected ${spec.someExpect} at least once in the sample window, never saw it: ${JSON.stringify(value)}`);
+    }
     if (spec.within !== undefined) {
         const lo = spec.within[0];
         const hi = spec.within[1];
@@ -311,29 +326,32 @@ function readProblems(spec, value) {
 //   { component: 'switch'|..., label?, selector?, interaction: 'press'|'release'|'click', holdMs? }
 // `selector` targets an element *inside* the component (e.g. the SHT31
 // thermometer bars, the potentiometer's range input), which is where several
-// components attach their handlers.
+// components attach their handlers. Returns false when the target could not be
+// found, so the step fails instead of silently doing nothing.
 async function performAction(page, spec) {
     if (spec.gpio !== undefined) {
         await page.evaluate((s) => window.MbedJSHal.gpio.write(window.MbedJSHal.PinNames[s.gpio], s.set), spec);
-        return;
+        return true;
     }
     if (spec.component !== undefined && (spec.interaction !== undefined || spec.value !== undefined)) {
-        await page.evaluate((s) => {
+        return await page.evaluate((s) => {
+            const want = s.label !== undefined ? s.label : s.component;
             const els = Array.prototype.slice.call(document.querySelectorAll('#components .component'));
             const el = els.find((e) => {
+                if (e.classList.contains(want)) return true;
                 const d = e.querySelector('.description');
-                return !!d && (!s.label || d.textContent.indexOf(s.label) !== -1);
+                return !!d && d.textContent.toLowerCase().indexOf(String(want).toLowerCase()) !== -1;
             });
-            if (!el) return;
+            if (!el) return false;
             const target = s.selector ? el.querySelector(s.selector) : el;
-            if (!target) return;
+            if (!target) return false;
 
             // A control (e.g. the potentiometer's range input) is driven by
             // giving it the value and firing the event its handler listens for.
             if (s.value !== undefined) {
                 target.value = String(s.value);
                 target.dispatchEvent(new Event('change', { bubbles: true }));
-                return;
+                return true;
             }
 
             const fire = (type) => target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -349,8 +367,8 @@ async function performAction(page, spec) {
                 if (s.holdMs) setTimeout(fire, s.holdMs, 'mouseup'); else fire('mouseup');
                 fire('click');
             }
+            return true;
         }, spec);
-        return;
     }
     throw new Error('action step needs "gpio"+"set" or "component"+"interaction" in its spec');
 }
@@ -391,8 +409,10 @@ async function runScenarioStep(page, step, scenario, failures, serialLines) {
     }
 
     if (step.action) {
-        await performAction(page, step.action);
-        return { passed: true, detail: `${label}: performed` };
+        const acted = await performAction(page, step.action);
+        return acted
+            ? { passed: true, detail: `${label}: performed` }
+            : { passed: false, detail: `${label}: no component matched ${JSON.stringify(step.action)}` };
     }
 
     if (step.wait) {

@@ -1,6 +1,6 @@
 {
     "name": "temperature",
-    "timeoutMs": 45000,
+    "timeoutMs": 60000,
     "steps": [
         {
             "name": "temperature demo boots with the Sht31 over I2C",
@@ -28,17 +28,22 @@
             }
         },
         {
-            "name": "give the demo's 500ms loop a cycle to act on the new reading",
-            "timeoutMs": 5000,
-            "wait": {
-                "ms": 900
+            "name": "the demo's threshold turns the warning LED on for the hotter reading",
+            "timeoutMs": 20000,
+            "read": {
+                "gpio": "LED1",
+                "samples": 15,
+                "intervalMs": 400,
+                "someExpect": 1
             }
         },
         {
-            "name": "the demo's threshold turns the warning LED on for the hotter reading",
+            "name": "the warning LED stays on while the sensor stays above the threshold",
             "timeoutMs": 10000,
             "read": {
                 "gpio": "LED1",
+                "samples": 5,
+                "intervalMs": 300,
                 "expect": 1
             }
         }

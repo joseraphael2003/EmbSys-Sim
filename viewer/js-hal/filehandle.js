@@ -15,7 +15,11 @@ window.MbedJSHal.filehandle = (function() {
     // read/write hooks must stop reaching into a FileHandle that is going away.
     var bindings = {};
 
+    // WASI errno values, which are the ones Emscripten's cDefs resolve to (they
+    // are NOT the Linux numbers: EBADF is 8 either way but ESPIPE is 70 here,
+    // not 29 - 29 is EIO).
     var EBADF = 8;
+    var ESPIPE = 70;
 
     // Stream operations for one bound FileHandle. Emscripten calls these as
     // (stream, buffer, offset, length); mbed's FileHandle::read/write take
@@ -26,7 +30,16 @@ window.MbedJSHal.filehandle = (function() {
     function streamOps(binding) {
         function transfer(name, handlePtr) {
             return function(stream, buffer, offset, length) {
-                if (!binding.live) return -EBADF;
+                if (!binding.live) {
+                    // mbed::remove_filehandle() detached this FileHandle, so the
+                    // descriptor must not reach into it any more. Throw rather
+                    // than return a negative: Emscripten's FS.read does
+                    // `stream.position += bytesRead` and then returns it with no
+                    // negative check (library_fs.js), so a returned -EBADF would
+                    // corrupt the position on its way out. FS.ErrnoError is the
+                    // mechanism the FS layer does understand.
+                    throw new FS.ErrnoError(EBADF);
+                }
                 return ccall(name, 'number',
                     [ 'number', 'number', 'number' ], [ handlePtr, buffer + offset, length ]);
             };
@@ -41,11 +54,12 @@ window.MbedJSHal.filehandle = (function() {
             // instead of failing: stdio probes SEEK_CUR before every write
             // (Stream::printf/puts/putc all fseek first), and failing that
             // probe puts the stream into an error state. SEEK_END is refused
-            // because there is no size to seek from; ESPIPE is what a
-            // nonexistent offset means.
+            // because there is no size to seek from, and ESPIPE is what a
+            // nonexistent offset means (Emscripten's FS.llseek uses the same
+            // code via cDefs.ESPIPE).
             llseek: function(stream, offset, whence) {
                 if (whence === 2 /* SEEK_END */) {
-                    throw new FS.ErrnoError(29 /* ESPIPE */);
+                    throw new FS.ErrnoError(ESPIPE);
                 }
                 return whence === 1 /* SEEK_CUR */ ? stream.position : offset;
             },
