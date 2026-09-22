@@ -1,33 +1,58 @@
+// Microsecond ticker HAL (targets/TARGET_SIMULATOR/us_ticker.c).
+//
+// The counter itself lives in C (the browser's monotonic clock), so the only
+// thing this module owns is the *compare match*: a one-shot host timer that
+// re-enters wasm through the us_ticker IRQ handler, which is what makes
+// Ticker/Timeout/Timer fire.
+//
+// Asyncify contract (the T3 hazard): Mbed calls the handler in interrupt
+// context, so the chain below must return without yielding. A browser task
+// only ever runs while the application is suspended, so entering wasm here
+// always happens with a pending unwind record; that is safe precisely because
+// the call is synchronous and leaves Asyncify's state untouched. The entry is
+// intentionally NOT `{ async: true }` - if a handler ever did sleep,
+// Emscripten's own assertion ("We cannot start an async operation when one is
+// already flight") fires instead of the nested unwind silently orphaning the
+// application's sleep.
 window.MbedJSHal.timers = (function() {
 
-    var tickers = {};
-    var timeouts = {};
+    var pending_match = null;
 
-    // HAL functions (these are called from C++)
-    function ticker_setup(id, interval) {
-        // console.log('ticker_setup', id, interval);
-
-        if (tickers[id]) {
-            clearInterval(tickers[id]);
-        }
-
-        tickers[id] = setInterval(() => {
-            ccall('invoke_ticker', null, [ 'number' ], [ id ], { async: true });
-        }, interval);
+    function fire() {
+        pending_match = null;
+        ccall('invoke_us_ticker_irq', null, [], []);
     }
 
-    function ticker_detach(id) {
-        // console.log('ticker_detach', id);
+    // HAL functions (these are called from C++)
+    function us_ticker_set_interrupt(delay_us) {
+        us_ticker_cancel_interrupt();
 
-        if (!(id in tickers)) return // console.error('ticker_detach called on non-registered ticker...');
+        // Host timers cannot resolve below ~1 ms, and browsers clamp nested
+        // timers further, so a sub-millisecond match fires early. That is
+        // safe: Mbed's ticker layer re-checks whether the queued event is due
+        // and re-arms if it is not.
+        if (delay_us <= 0) {
+            delay_us = 0;
+        }
+        pending_match = setTimeout(fire, delay_us / 1000);
+    }
 
-        clearInterval(tickers[id]);
-        delete tickers[id];
+    function us_ticker_fire_interrupt() {
+        us_ticker_cancel_interrupt();
+        pending_match = setTimeout(fire, 0);
+    }
+
+    function us_ticker_cancel_interrupt() {
+        if (pending_match !== null) {
+            clearTimeout(pending_match);
+            pending_match = null;
+        }
     }
 
     return {
-        ticker_setup: ticker_setup,
-        ticker_detach: ticker_detach
+        us_ticker_set_interrupt: us_ticker_set_interrupt,
+        us_ticker_fire_interrupt: us_ticker_fire_interrupt,
+        us_ticker_cancel_interrupt: us_ticker_cancel_interrupt
     };
 
 })();

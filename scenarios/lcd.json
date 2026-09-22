@@ -1,6 +1,6 @@
 {
     "name": "lcd",
-    "timeoutMs": 90000,
+    "timeoutMs": 120000,
     "steps": [
         {
             "name": "christmas demo boots and drives the C12832",
@@ -12,10 +12,18 @@
         },
         {
             "name": "animation and scrolling text run to completion",
-            "timeoutMs": 60000,
+            "timeoutMs": 90000,
             "assert": {
                 "type": "serial",
                 "substring": "Done!"
+            }
+        },
+        {
+            "name": "the LCD panel has pixels drawn on it (tree bitmap + scrolling text)",
+            "timeoutMs": 5000,
+            "read": {
+                "canvas": "#components .component.c12832 canvas",
+                "atLeast": 200
             }
         }
     ]

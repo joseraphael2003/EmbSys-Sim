@@ -162,18 +162,29 @@
 #endif
 
 // Device features — the virtual board exposes only what the JS HAL models.
-// FLASH/ANALOG/PWM have no backing hardware here; CE headers compile their
-// drivers out when these are 0 (matching .simignore excludes). InterruptIn is
-// backed: viewer/js-hal/gpio.js calls the vendored gpio_irq_api.c bridge.
-// RTC is backed too: rtc_api.c maps rtc_read/rtc_write onto the browser clock,
-// which is what makes time()/set_time() and X.509 validity windows work.
+// FLASH has no backing hardware here; CE headers compile their drivers out when
+// these are 0. This header is authoritative: it is what hal/*_api.h includes via
+// `device.h`, so a -D flag for the same macro does not win here.
+//   InterruptIn  gpio_irq_api.c bridge driven by viewer/js-hal/gpio.js
+//   RTC          rtc_api.c maps rtc_read/rtc_write onto the browser clock,
+//                which is what makes time()/set_time() and X.509 validity
+//                windows work
+//   USTICKER     us_ticker.c runs the microsecond counter off the browser's
+//                monotonic clock and the compare match off a host timer; it
+//                is what Ticker/Timeout/Timer are built on
+//   PWMOUT       pwmout_api.c drives the viewer's PWM pin model, which
+//                viewer/js-ui/components/pwm_speaker.js renders as a tone
+//   ANALOGIN/OUT analogin_api.c and analogout_api.c drive the viewer's analog
+//                pin model, which viewer/js-ui/components/potentiometer.js
+//                reads and writes
 #define DEVICE_INTERRUPTIN    1
-#define DEVICE_ANALOGIN       0
-#define DEVICE_ANALOGOUT      0
-#define DEVICE_PWMOUT         0
+#define DEVICE_ANALOGIN       1
+#define DEVICE_ANALOGOUT      1
+#define DEVICE_PWMOUT         1
 #define DEVICE_SERIAL         1
 #define DEVICE_FLASH          0
 #define DEVICE_EMAC           1
 #define DEVICE_RTC            1
+#define DEVICE_USTICKER       1
 
 #endif  // __SIMULATOR_DEVICE_H__

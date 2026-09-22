@@ -1,6 +1,6 @@
 {
     "name": "temperature",
-    "timeoutMs": 30000,
+    "timeoutMs": 45000,
     "steps": [
         {
             "name": "temperature demo boots with the Sht31 over I2C",
@@ -8,6 +8,38 @@
             "assert": {
                 "type": "serial",
                 "substring": "Set the temperature above 25 degrees to trigger the warning LED"
+            }
+        },
+        {
+            "name": "the warning LED stays off while the sensor reports 20.50 C",
+            "timeoutMs": 5000,
+            "read": {
+                "gpio": "LED1",
+                "expect": 0
+            }
+        },
+        {
+            "name": "raise the simulated sensor above 25 degrees on the SHT31 component",
+            "timeoutMs": 5000,
+            "action": {
+                "component": "SHT31",
+                "selector": ".thermometer",
+                "interaction": "click"
+            }
+        },
+        {
+            "name": "give the demo's 500ms loop a cycle to act on the new reading",
+            "timeoutMs": 5000,
+            "wait": {
+                "ms": 900
+            }
+        },
+        {
+            "name": "the demo's threshold turns the warning LED on for the hotter reading",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "LED1",
+                "expect": 1
             }
         }
     ]

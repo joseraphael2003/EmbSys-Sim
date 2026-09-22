@@ -1,0 +1,9 @@
+{
+    "name": "analog",
+    "peripherals": [{
+        "component": "Potentiometer",
+        "args": {
+            "Potentiometer": "PinNames.p15"
+        }
+    }]
+}

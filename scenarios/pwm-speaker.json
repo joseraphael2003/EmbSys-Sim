@@ -1,0 +1,26 @@
+{
+    "name": "pwm-speaker",
+    "timeoutMs": 60000,
+    "steps": [
+        {
+            "name": "the tone period the application asks for reaches the speaker (200/150/125 Hz -> 5000/6666/8000 us)",
+            "timeoutMs": 15000,
+            "read": {
+                "gpio": "p21",
+                "aspect": "period_us",
+                "within": [5000, 8000]
+            }
+        },
+        {
+            "name": "the speaker is driven at full volume and then silenced between tones",
+            "timeoutMs": 30000,
+            "read": {
+                "gpio": "p21",
+                "samples": 16,
+                "intervalMs": 400,
+                "within": [0, 512],
+                "distinctAtLeast": 2
+            }
+        }
+    ]
+}

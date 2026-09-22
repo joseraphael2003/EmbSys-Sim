@@ -1,0 +1,80 @@
+{
+    "name": "test-analog",
+    "timeoutMs": 45000,
+    "steps": [
+        {
+            "name": "AnalogIn reads the potentiometer at rest",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "ANALOG:pot 0\\.000 u16 0 out 0\\.000"
+            }
+        },
+        {
+            "name": "the threshold LED is off below 0.3",
+            "timeoutMs": 5000,
+            "read": {
+                "gpio": "LED1",
+                "expect": 0
+            }
+        },
+        {
+            "name": "turn the potentiometer (p15) up to full scale on its component",
+            "timeoutMs": 5000,
+            "action": {
+                "component": "Potentiometer",
+                "selector": "input[type=range]",
+                "value": 5
+            }
+        },
+        {
+            "name": "AnalogIn reports the new voltage as a normalized float and a 16 bit value",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "ANALOG:pot 1\\.000 u16 65535 out 1\\.000"
+            }
+        },
+        {
+            "name": "the threshold LED turns on above 0.3",
+            "timeoutMs": 5000,
+            "read": {
+                "gpio": "LED1",
+                "expect": 1
+            }
+        },
+        {
+            "name": "the analog output pin holds the voltage the application wrote",
+            "timeoutMs": 5000,
+            "read": {
+                "gpio": "p20",
+                "expect": 1024
+            }
+        },
+        {
+            "name": "half scale maps to half the 16 bit range, not to full scale",
+            "timeoutMs": 5000,
+            "action": {
+                "component": "Potentiometer",
+                "selector": "input[type=range]",
+                "value": 2.5
+            }
+        },
+        {
+            "name": "AnalogIn reports 0.500 / 32768 for 2.5V",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "ANALOG:pot 0\\.500 u16 32768 out 0\\.500"
+            }
+        },
+        {
+            "name": "AnalogOut holds the half-scale voltage",
+            "timeoutMs": 5000,
+            "read": {
+                "gpio": "p20",
+                "expect": 512
+            }
+        }
+    ]
+}

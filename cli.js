@@ -111,6 +111,32 @@ let fn = program.inputDir ? application.buildDirectory : application.buildFile;
 // JSON assertion scenarios for headless runs (--scenario)
 // ---------------------------------------------------------------------------
 
+// Link-closure guard for scenarios.
+//
+// The link runs with ERROR_ON_UNDEFINED_SYMBOLS=0, so a hole in the component
+// closure is not a link error: Emscripten materialises it as a JS import stub
+// that aborts with `RuntimeError: Aborted(missing function: <symbol>)` the
+// moment the application calls it - which reads as an unrelated runtime crash
+// in the middle of a scenario. Scan the generated glue for those stubs instead
+// and fail before the scenario starts, naming the symbols. This is the same
+// check test/run-t1-slice.js applies to its fixture, applied to the artifact a
+// scenario is about to launch.
+function unresolvedImports(jsPath) {
+    if (!fs.existsSync(jsPath)) {
+        return [];
+    }
+
+    const glue = fs.readFileSync(jsPath, 'utf-8');
+    const names = new Set();
+    const re = /abort\('missing function: ([^']+)'\)/g;
+    let m;
+    while ((m = re.exec(glue)) !== null) {
+        names.add(m[1]);
+    }
+
+    return [...names].sort();
+}
+
 // Load and parse a scenario file. Throws on any structural problem so callers
 // fail fast (they can map the error onto a non-zero exit).
 function loadScenario(file) {
@@ -179,12 +205,17 @@ function serialPass(spec, buffer) {
     return false;
 }
 
-// Resolve the value read from a peripheral/component on the viewer page.
-//   { gpio: '<PINNAME>' }                       => pin state (0/1)
+// Read one value from a peripheral/component on the viewer page.
+//   { gpio: '<PINNAME>' }                       => pin state (0/1) or PWM duty (0..1024)
+//   { gpio: '<PINNAME>', aspect: 'period_us' }  => PWM period, microseconds
 //   { component: 'led'|'Switch', label?: ... }  => 1 when the component is "on"
-async function readState(page, spec) {
+//   { canvas: '<selector>' }                    => pixels drawn on a rendered display
+async function readSample(page, spec) {
     if (spec.gpio !== undefined) {
-        return await page.evaluate((pin) => window.MbedJSHal.gpio.read(window.MbedJSHal.PinNames[pin]), spec.gpio);
+        return await page.evaluate((s) => {
+            const pin = window.MbedJSHal.PinNames[s.gpio];
+            return s.aspect === 'period_us' ? window.MbedJSHal.gpio.get_period_us(pin) : window.MbedJSHal.gpio.read(pin);
+        }, spec);
     }
     if (spec.component !== undefined) {
         return await page.evaluate((s) => {
@@ -205,18 +236,88 @@ async function readState(page, spec) {
             return null;
         }, spec);
     }
-    throw new Error('read step needs "gpio" or "component" in its spec');
+    if (spec.canvas !== undefined) {
+        // A rendered display is a canvas that starts as one uniform background
+        // colour; everything the application drew differs from the first pixel.
+        return await page.evaluate((selector) => {
+            const el = document.querySelector(selector);
+            if (!el || typeof el.getContext !== 'function') return null;
+            const ctx = el.getContext('2d');
+            const data = ctx.getImageData(0, 0, el.width, el.height).data;
+            const background = [data[0], data[1], data[2]];
+            let drawn = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] !== background[0] || data[i + 1] !== background[1] || data[i + 2] !== background[2]) {
+                    drawn++;
+                }
+            }
+            return drawn;
+        }, spec.canvas);
+    }
+    throw new Error('read step needs "gpio", "component" or "canvas" in its spec');
+}
+
+// Read once, or take a burst of samples when the step asks for one. A signal
+// that changes over time - a PWM duty sweep, a tone alternating between
+// audible and silent - can only be observed by looking at it more than once.
+async function readState(page, spec) {
+    if (!spec.samples) {
+        return await readSample(page, spec);
+    }
+    const samples = [];
+    for (let i = 0; i < spec.samples; i++) {
+        samples.push(await readSample(page, spec));
+        if (i < spec.samples - 1) {
+            await sleep(typeof spec.intervalMs === 'number' ? spec.intervalMs : 100);
+        }
+    }
+    return samples;
+}
+
+// Assert a read step's expectations against the value (or the sample burst).
+// Returns the list of unmet expectations; empty means the step passed.
+function readProblems(spec, value) {
+    const problems = [];
+    const values = Array.isArray(value) ? value : [value];
+
+    if (spec.expect !== undefined && !values.every((v) => v === spec.expect)) {
+        problems.push(`expected ${spec.expect}, got ${JSON.stringify(value)}`);
+    }
+    if (spec.within !== undefined) {
+        const lo = spec.within[0];
+        const hi = spec.within[1];
+        if (!values.every((v) => typeof v === 'number' && v >= lo && v <= hi)) {
+            problems.push(`expected every reading within [${lo}, ${hi}], got ${JSON.stringify(value)}`);
+        }
+    }
+    if (spec.atLeast !== undefined) {
+        if (!values.every((v) => typeof v === 'number' && v >= spec.atLeast)) {
+            problems.push(`expected every reading >= ${spec.atLeast}, got ${JSON.stringify(value)}`);
+        }
+    }
+    if (spec.distinctAtLeast !== undefined) {
+        const distinct = new Set(values).size;
+        if (distinct < spec.distinctAtLeast) {
+            problems.push(`expected at least ${spec.distinctAtLeast} distinct readings, got ${distinct}: ${JSON.stringify(value)}`);
+        }
+    }
+
+    return problems;
 }
 
 // Simulate a user interaction on the viewer page.
 //   { gpio: '<PINNAME>', set: 0|1 }                          peripheral write
-//   { component: 'switch'|..., label?, interaction: 'press'|'release'|'click', holdMs? }
+//   { component: 'switch'|..., label?, selector?, value }     set a control (range input) and fire change
+//   { component: 'switch'|..., label?, selector?, interaction: 'press'|'release'|'click', holdMs? }
+// `selector` targets an element *inside* the component (e.g. the SHT31
+// thermometer bars, the potentiometer's range input), which is where several
+// components attach their handlers.
 async function performAction(page, spec) {
     if (spec.gpio !== undefined) {
         await page.evaluate((s) => window.MbedJSHal.gpio.write(window.MbedJSHal.PinNames[s.gpio], s.set), spec);
         return;
     }
-    if (spec.component !== undefined && spec.interaction !== undefined) {
+    if (spec.component !== undefined && (spec.interaction !== undefined || spec.value !== undefined)) {
         await page.evaluate((s) => {
             const els = Array.prototype.slice.call(document.querySelectorAll('#components .component'));
             const el = els.find((e) => {
@@ -224,10 +325,30 @@ async function performAction(page, spec) {
                 return !!d && (!s.label || d.textContent.indexOf(s.label) !== -1);
             });
             if (!el) return;
-            const fire = (type) => el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+            const target = s.selector ? el.querySelector(s.selector) : el;
+            if (!target) return;
+
+            // A control (e.g. the potentiometer's range input) is driven by
+            // giving it the value and firing the event its handler listens for.
+            if (s.value !== undefined) {
+                target.value = String(s.value);
+                target.dispatchEvent(new Event('change', { bubbles: true }));
+                return;
+            }
+
+            const fire = (type) => target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
             if (s.interaction === 'press') fire('mousedown');
             else if (s.interaction === 'release') fire('mouseup');
-            else { fire('mousedown'); if (s.holdMs) setTimeout(() => fire('mouseup'), s.holdMs); else fire('mouseup'); }
+            else {
+                // A dispatchEvent() mouse pair does NOT synthesise the
+                // compatibility click an untrusted event would get in a real
+                // browser, and components attach both kinds of handler
+                // (board.js/push_button use onmousedown/onmouseup, the SHT31
+                // thermometer uses onclick), so fire the whole sequence.
+                fire('mousedown');
+                if (s.holdMs) setTimeout(fire, s.holdMs, 'mouseup'); else fire('mouseup');
+                fire('click');
+            }
         }, spec);
         return;
     }
@@ -260,12 +381,13 @@ async function runScenarioStep(page, step, scenario, failures, serialLines) {
 
     if (step.read) {
         const value = await readState(page, step.read);
-        if (step.read.expect !== undefined) {
-            return value === step.read.expect
-                ? { passed: true, detail: `${label}: read ${value}` }
-                : { passed: false, detail: `${label}: expected ${step.read.expect}, got ${JSON.stringify(value)}` };
+        if (value === null || (Array.isArray(value) && value.indexOf(null) !== -1)) {
+            return { passed: false, detail: `${label}: nothing on the page matched ${JSON.stringify(step.read)}` };
         }
-        return { passed: true, detail: `${label}: read ${JSON.stringify(value)}` };
+        const problems = readProblems(step.read, value);
+        return problems.length === 0
+            ? { passed: true, detail: `${label}: read ${JSON.stringify(value)}` }
+            : { passed: false, detail: `${label}: ${problems.join('; ')}` };
     }
 
     if (step.action) {
@@ -348,6 +470,20 @@ fn(program.inputDir || program.inputFile, program.outputFile, extraArgs, program
                 }
                 else if (program.launchHeadless) {
                     const scenario = program.scenario ? loadScenario(program.scenario) : null;
+
+                    // A scenario can only mean something if the artifact it
+                    // launches is actually complete; see unresolvedImports().
+                    if (scenario) {
+                        const unresolved = unresolvedImports(Path.join(outputDir, `${name}.js`));
+                        if (unresolved.length) {
+                            process.stderr.write(JSON.stringify({
+                                passed: false,
+                                failedStep: null,
+                                detail: `Link closure incomplete: ${unresolved.length} unresolved symbol(s): ${unresolved.join(', ')}`
+                            }) + '\n');
+                            process.exit(1);
+                        }
+                    }
 
                     browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
                     const page = await browser.newPage();

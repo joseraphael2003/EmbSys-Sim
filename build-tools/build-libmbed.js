@@ -80,6 +80,7 @@ const COMPONENTS = [
         files: [
             'mbed-os/platform/cxxsupport/mstd_mutex.cpp',
             'mbed-os/platform/source/ATCmdParser.cpp',
+            'mbed-os/platform/source/CriticalSectionLock.cpp',
             'mbed-os/platform/source/FileBase.cpp',
             'mbed-os/platform/source/FileHandle.cpp',
             'mbed-os/platform/source/FilePath.cpp',
@@ -110,10 +111,13 @@ const COMPONENTS = [
     {
         // CE HAL sources. The convenience helpers in hal/source/mbed_gpio.c
         // drive the target primitives; the target only provides gpio_init/
-        // gpio_mode/gpio_dir/gpio_free (see targets/TARGET_SIMULATOR). The
-        // ticker API implementations (mbed_ticker_api.c, mbed_us_ticker_api.c,
-        // mbed_lp_ticker_api.c) are not ported yet: the simulator's timing
-        // surface is the TARGET_SIMULATOR us_ticker replacement.
+        // gpio_mode/gpio_dir/gpio_free (see targets/TARGET_SIMULATOR).
+        // mbed_ticker_api.c is the event queue Ticker/Timeout/Timer share and
+        // mbed_us_ticker_api.c publishes get_us_ticker_data() on top of the
+        // TARGET_SIMULATOR us_ticker replacement; the low-power ticker API is
+        // absent because the virtual board has no low-power ticker
+        // (DEVICE_LPTICKER 0), and pwmout_init_direct() arrives weak from
+        // static_pinmap.cpp.
         name: 'mbed-os:hal',
         files: [
             'mbed-os/hal/source/LowPowerTickerWrapper.cpp',
@@ -121,6 +125,8 @@ const COMPONENTS = [
             'mbed-os/hal/source/mbed_flash_api.c',
             'mbed-os/hal/source/mbed_gpio.c',
             'mbed-os/hal/source/mbed_gpio_irq.c',
+            'mbed-os/hal/source/mbed_ticker_api.c',
+            'mbed-os/hal/source/mbed_us_ticker_api.c',
             'mbed-os/hal/source/mbed_itm_api.c',
             'mbed-os/hal/source/mbed_lp_ticker_wrapper.cpp',
             'mbed-os/hal/source/mbed_pinmap_common.c',
@@ -306,21 +312,30 @@ const COMPONENTS = [
     {
         // Vendored Emscripten target: the primitives CE's HAL conveniences
         // call, plus the cooperative runtime seam (sleeping, wall clock,
-        // critical sections, error handling, ThisThread/Kernel shims) and the
-        // Web Crypto entropy source Mbed TLS draws from
-        // (entropy_hardware_poll.c -> window.crypto.getRandomValues()).
-        // analogin/pwmout/us_ticker/flash APIs are OS5-era files that are not
-        // ported yet; drivers/Ticker.cpp and platform/mbed_retarget.cpp are
-        // superseded by the CE driver layer / Emscripten stdio.
+        // critical sections, error handling, ThisThread/Kernel shims), the
+        // microsecond ticker Ticker/Timeout/Timer run on (us_ticker.c over the
+        // browser clock + viewer/js-hal/timers.js), the PWM and analog pin
+        // adapters (pwmout_api.c, analogin_api.c, analogout_api.c over the
+        // viewer's pin model) and the Web Crypto entropy source Mbed TLS draws
+        // from (entropy_hardware_poll.c -> window.crypto.getRandomValues()).
+        // rtos/Thread.cpp is an OS5-era file that is not ported yet;
+        // drivers/Ticker.cpp and platform/mbed_retarget.cpp used to live here
+        // and were deleted - superseded by the CE driver layer and by
+        // platform/mbed_fdopen.cpp + Emscripten stdio.
         name: 'targets/TARGET_SIMULATOR',
         files: [
+            'targets/TARGET_SIMULATOR/analogin_api.c',
+            'targets/TARGET_SIMULATOR/analogout_api.c',
             'targets/TARGET_SIMULATOR/entropy_hardware_poll.c',
             'targets/TARGET_SIMULATOR/gpio_api.c',
             'targets/TARGET_SIMULATOR/gpio_irq_api.c',
+            'targets/TARGET_SIMULATOR/pwmout_api.c',
             'targets/TARGET_SIMULATOR/rtc_api.c',
             'targets/TARGET_SIMULATOR/serial_api.c',
+            'targets/TARGET_SIMULATOR/us_ticker.c',
             'targets/TARGET_SIMULATOR/platform/mbed_critical.cpp',
             'targets/TARGET_SIMULATOR/platform/mbed_error.c',
+            'targets/TARGET_SIMULATOR/platform/mbed_fdopen.cpp',
             'targets/TARGET_SIMULATOR/platform/mbed_wait_api_no_rtos.cpp',
             'targets/TARGET_SIMULATOR/rtos/Kernel.cpp',
             'targets/TARGET_SIMULATOR/rtos/ThisThread.cpp',

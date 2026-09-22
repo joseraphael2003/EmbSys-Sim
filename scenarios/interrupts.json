@@ -1,6 +1,6 @@
 {
     "name": "interrupts",
-    "timeoutMs": 30000,
+    "timeoutMs": 60000,
     "steps": [
         {
             "name": "Ticker (1s, chrono attach) fires",
@@ -16,6 +16,46 @@
             "assert": {
                 "type": "serial",
                 "regex": "Timeout fired"
+            }
+        },
+        {
+            "name": "the Timeout handler left LED3 on",
+            "timeoutMs": 5000,
+            "read": {
+                "gpio": "LED3",
+                "expect": 1
+            }
+        },
+        {
+            "name": "press BUTTON1 on the board",
+            "timeoutMs": 5000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 1
+            }
+        },
+        {
+            "name": "release BUTTON1 on the board (the falling edge InterruptIn watches)",
+            "timeoutMs": 5000,
+            "action": {
+                "gpio": "BUTTON1",
+                "set": 0
+            }
+        },
+        {
+            "name": "the InterruptIn handler ran on the button's falling edge",
+            "timeoutMs": 10000,
+            "assert": {
+                "type": "serial",
+                "regex": "BUTTON1 fall invoked"
+            }
+        },
+        {
+            "name": "the handler toggled LED2 on",
+            "timeoutMs": 5000,
+            "read": {
+                "gpio": "LED2",
+                "expect": 1
             }
         }
     ]
