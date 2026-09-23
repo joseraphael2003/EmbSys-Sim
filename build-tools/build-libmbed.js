@@ -283,17 +283,30 @@ const COMPONENTS = [
         ],
     },
     {
-        // nanopacket libservice string/Bits/List helpers (ip4tos/stoip4,
-        // ns_list_*, ...). Only the four source subdirectories that netsocket,
-        // mbed-coap and the demo libraries reference are in the closure; the
-        // remaining libservice sources (trace, nsdynmemLIB, nvmHelper, ...)
-        // are not.
+        // nanopacket libservice helpers (ip4tos/stoip4, ns_list_*,
+        // common_functions, the ns_dyn_mem heap, ...). Each source directory
+        // below was added because a linked translation unit calls into it:
+        //   * libBits/libList/libip4string/libip6string - netsocket, mbed-coap,
+        //     the LoRaWAN stack and the demo libraries;
+        //   * nsdynmemLIB - the ns_dyn_mem_* heap API. The Pelion port is what
+        //     brought it into the closure: sal-stack-nanostack-eventloop/
+        //     source/{event,ns_timeout,ns_timer,system_timer}.c and
+        //     ns-hal-pal/ns_hal_init.c all call ns_dyn_mem_init/alloc/
+        //     temporary_alloc/free, and no other object in the archive defines
+        //     them - an unwired directory here is a link hole, not an unused
+        //     library.
+        // Left unwired on purpose, each verified unreferenced with
+        // `emnm --undefined-only libmbed.a` on the archive as it stands:
+        // libTrace (CE's mbed-os:mbed-trace component defines the trace
+        // symbols), nsdynmemtracker (ns_dyn_mem_tracker_*), nvmHelper
+        // (ns_nvm_helper_*) and IPv6_fcf_lib (ip_fast_csum).
         name: 'mbed-os:nanostack-libservice',
         sources: [
             'mbed-os/connectivity/libraries/nanostack-libservice/source/libBits',
             'mbed-os/connectivity/libraries/nanostack-libservice/source/libList',
             'mbed-os/connectivity/libraries/nanostack-libservice/source/libip4string',
             'mbed-os/connectivity/libraries/nanostack-libservice/source/libip6string',
+            'mbed-os/connectivity/libraries/nanostack-libservice/source/nsdynmemLIB',
         ],
         includes: [
             // Both forms the tree includes by: the flat one ("ns_list.h") and
@@ -554,16 +567,16 @@ const COMPONENTS = [
     // nothing and is not a second definition.
     // =======================================================================
     {
-        // The Pelion Device Management client library itself. Four of the five
-        // translation units are the library proper; update_ui_example.cpp is here
-        // because MBED_CLOUD_CLIENT_SUPPORT_UPDATE is defined (see
-        // pelion-dm/mbed_cloud_client_user_config.h) and the library therefore
-        // calls update_ui_set_cloud_client() and
-        // set_update_authorize_handler(update_authorize) - both of which only that
-        // file defines. SIMULATOR_Legacy-Fixed/ built exactly this way: its
-        // .simignore excludes neither of them and its copy of the user config
-        // header is byte-identical to ours, so firmware-update support is a
-        // property of this simulator, not a define this task introduced.
+        // The Pelion Device Management client library itself: the four
+        // translation units of the library proper.
+        // Not wired: update_ui_example.cpp, because firmware-update support is
+        // not part of this build - MBED_CLOUD_CLIENT_SUPPORT_UPDATE is absent
+        // from pelion-dm/mbed_cloud_client_user_config.h (the reasons are
+        // written there), so nothing calls update_ui_set_cloud_client() /
+        // update_authorize() and this file would compile to an empty object.
+        // The legacy tree did wire it, but the legacy tree had Mbed OS 5's
+        // FlashIAP; against Mbed CE the update subsystem has no provider that
+        // can exist on a flashless, wasm substrate.
         // Not wired: memory_tests.cpp (defines m2mobject_test_set and friends, which
         // nothing in the closure references) and storage_helper/ (see above).
         name: 'simple-mbed-cloud-client',
@@ -572,7 +585,6 @@ const COMPONENTS = [
             'simple-mbed-cloud-client/resource.cpp',
             'simple-mbed-cloud-client/mbed_cloud_client_resource.cpp',
             'simple-mbed-cloud-client/pal_plat_rot_insecure.c',
-            'simple-mbed-cloud-client/update_ui_example.cpp',
         ],
         includes: [
             'simple-mbed-cloud-client',

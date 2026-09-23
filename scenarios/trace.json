@@ -1,0 +1,40 @@
+{
+    "name": "trace",
+    "timeoutMs": 60000,
+    "steps": [
+        {
+            "name": "mbed_trace_init() + tr_info() reach the serial console through the build's own trace configuration (tag, group and message all formatted by mbed-trace, not by the demo)",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "\\[INFO\\]\\[main\\]: this is info msg"
+            }
+        },
+        {
+            "name": "tr_warn() is emitted at warn level",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "\\[WARN\\]\\[main\\]: this is warning msg"
+            }
+        },
+        {
+            "name": "tr_err() is emitted at error level",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "\\[ERR \\]\\[main\\]: this is error msg"
+            }
+        },
+        {
+            "name": "the page survives main() returning (a page read: a dead page fails here)",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "LED1",
+                "samples": 3,
+                "intervalMs": 100,
+                "expect": 0
+            }
+        }
+    ]
+}

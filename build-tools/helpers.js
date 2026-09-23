@@ -174,6 +174,18 @@ const defaultBuildFlags = [
     // without it mbed_trace_ipv6() is not declared - which is what
     // mbed-client-classic/source/m2mconnectionhandlerpimpl.cpp:409 calls.
     '-DMBED_CONF_NANOSTACK_LIBSERVICE_PRESENT=1',
+    // The ARM_UC_* entries below are the vendor config of the update hub, and
+    // they are now INERT: MBED_CLOUD_CLIENT_SUPPORT_UPDATE is absent from
+    // pelion-dm/mbed_cloud_client_user_config.h, so nothing in any demo
+    // references an update PAL and none of the objects they select
+    // (arm_uc_pal_blockdevice*, arm_uc_pal_mbed_extensions, ...) is pulled into
+    // a link. They are kept, not deleted, because removing them changes the
+    // build-flags hash and therefore clears the whole object cache (~400
+    // translation units) - and because arm_uc_config.h *errors out* without a
+    // profile define. Left as a T10 handoff item: they describe an
+    // update-storage layout this substrate does not have (see decisions.md,
+    // T7d) and should be dropped together with the vendor patch that would be
+    // needed to select no PAL at all.
     '-DARM_UC_USE_PAL_BLOCKDEVICE=1',
     '-DPAL_FS_MOUNT_POINT_PRIMARY=\"/IDBFS/pal\"',
     '-DMBED_CONF_EVENTS_SHARED_DISPATCH_FROM_APPLICATION=1',

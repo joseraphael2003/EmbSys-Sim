@@ -40,6 +40,23 @@ static inline uint32_t __sim_rbit(uint32_t v) {
 #define __RBIT(value) __builtin_bswap32(__bitrev32_step(__bitrev32_step(__bitrev32_step((uint32_t)(value), 16), 8), 4))
 #endif
 
+/* TARGET_SIMULATOR: these are the CMSIS core intrinsics a real Cortex-M target
+ * gets from core_cm*.h, declared here because there is no CMSIS core header for
+ * wasm. They are defined once, in this target's platform/mbed_critical.cpp
+ * (__enable_irq/__disable_irq/__get_PRIMASK; the rest of the block has no
+ * definition and no reference in this closure - they are declared for the
+ * sources that expect a CMSIS core header to exist).
+ *
+ * extern "C" is what makes the header's contract match the hardware's: the
+ * intrinsics are C symbols, and their only consumers here are C translation
+ * units (mbed-os/hal/source/mbed_critical_section_api.c and the Pelion
+ * atomic-queue's critical.c). Without it a C++ translation unit that included
+ * this header would emit a mangled reference to a name nothing defines, which
+ * is the link hole this declaration block exists to prevent. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void NVIC_SystemReset ();
 
 void __enable_irq ();
@@ -65,5 +82,9 @@ uint32_t __STREXH (uint16_t value, volatile uint16_t *addr);
 uint32_t __STREXW (uint32_t value, volatile uint32_t *addr);
 
 void __WFI();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
