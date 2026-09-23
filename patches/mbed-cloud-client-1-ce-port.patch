@@ -1,0 +1,196 @@
+diff --git a/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/Crypto/pal_plat_Crypto.c b/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/Crypto/pal_plat_Crypto.c
+index e33a14b..c810fbf 100755
+--- a/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/Crypto/pal_plat_Crypto.c
++++ b/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/Crypto/pal_plat_Crypto.c
+@@ -986,7 +986,14 @@ palStatus_t pal_plat_CtrDRBGSeed(palCtrDrbgCtxHandle_t ctx, const void* seed, si
+     int32_t platStatus = CRYPTO_PLAT_SUCCESS;
+     palCtrDrbgCtx_t* palCtrDrbgCtx = (palCtrDrbgCtx_t*)ctx;
+ 
+-    platStatus = mbedtls_ctr_drbg_seed_entropy_len(&palCtrDrbgCtx->ctrDrbgCtx, pal_plat_entropySourceDRBG, &palCtrDrbgCtx->entropy, seed, len, 0);
++    // Mbed TLS 2.25 (what the pinned Mbed CE revision bundles) has no
++    // mbedtls_ctr_drbg_seed_entropy_len(); that form only existed in the older
++    // library this PAL port was written against. The 2.25 API splits it into
++    // seed() plus set_entropy_len(), and the length the old call passed (0)
++    // cannot be what it meant - a zero-length entropy read is no entropy at
++    // all - so the library's own default (MBEDTLS_CTR_DRBG_ENTROPY_LEN) applies,
++    // which is the documented override point and never weaker than the caller.
++    platStatus = mbedtls_ctr_drbg_seed(&palCtrDrbgCtx->ctrDrbgCtx, pal_plat_entropySourceDRBG, &palCtrDrbgCtx->entropy, seed, len);
+     if (CRYPTO_PLAT_SUCCESS != platStatus)
+     {
+         switch(platStatus)
+diff --git a/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/TLS/pal_plat_TLS.c b/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/TLS/pal_plat_TLS.c
+index f53e3b6..426f775 100755
+--- a/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/TLS/pal_plat_TLS.c
++++ b/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS/TLS/pal_plat_TLS.c
+@@ -654,7 +654,19 @@ palStatus_t pal_plat_setHandShakeTimeOut(palTLSConfHandle_t palTLSConf, uint32_t
+ 		maxTimeout = timeoutInMilliSec;
+ 	}
+ 
++#if defined(MBEDTLS_SSL_PROTO_DTLS)
+ 	mbedtls_ssl_conf_handshake_timeout(localConfigCtx->confCtx, minTimeout, maxTimeout);
++#else
++	/* Mbed TLS declares mbedtls_ssl_conf_handshake_timeout() only under
++	 * MBEDTLS_SSL_PROTO_DTLS, and this build has no DTLS: the simulator's network
++	 * model is a TCP relay, so every TLS session here is a TLS client session and
++	 * the DTLS retransmission schedule this function configures does not exist.
++	 * The setting is therefore meaningless rather than unsupported, and PAL's
++	 * contract - a configuration call that reports PAL_SUCCESS - is preserved.
++	 * (PAL's own Configs/mbedTLS/mbedTLSConfig_mbedOS.h lists
++	 * MBEDTLS_SSL_PROTO_DTLS as required; the simulator deliberately does not
++	 * enable it, and simulator_mbedtls_config.h records why.) */
++#endif
+ 
+ 	return PAL_SUCCESS;
+ }
+diff --git a/mbed-client-pal/Source/Port/Reference-Impl/OS_Specific/mbedOS/Networking/pal_plat_network.cpp b/mbed-client-pal/Source/Port/Reference-Impl/OS_Specific/mbedOS/Networking/pal_plat_network.cpp
+old mode 100644
+new mode 100755
+index b8ab7ef..64a03b5
+--- a/mbed-client-pal/Source/Port/Reference-Impl/OS_Specific/mbedOS/Networking/pal_plat_network.cpp
++++ b/mbed-client-pal/Source/Port/Reference-Impl/OS_Specific/mbedOS/Networking/pal_plat_network.cpp
+@@ -236,11 +236,12 @@ void palConnectCallBack()
+             // Pre fetch and store the shared queue used for bouncing the callbacks out of interrupt
+             // context, as the user of it may be ran from interrupt and it can't go and start
+             // creating worker threads from there.
+-            // Note: the code uses mbed_highprio_event_queue() instead of mbed_event_queue()
+-            // as the high priority queue and its thread is likely there already thanks to
+-            // arm_hal_timer.cpp. Technically the client side does not really care, if the events
+-            // were delayed a bit by other events or not.
+-            shared_event_queue = mbed_highprio_event_queue();
++            // Mbed CE declares mbed_highprio_event_queue() only `#ifdef MBED_CONF_RTOS_PRESENT`
++            // (events/include/events/mbed_shared_queues.h:84): the high-priority queue exists to
++            // be dispatched by a high-priority *thread*, and this build is a documented no-RTOS
++            // one. The shared application-dispatched queue is the queue this substrate has, and
++            // the client side does not care whether events are delayed by others.
++            shared_event_queue = mbed_event_queue();
+             PAL_VALIDATE_CONDITION_WITH_ERROR((shared_event_queue == NULL),NSAPI_ERROR_UNSUPPORTED);
+ 
+             Callback<void()> mycall(this, &PALSocketWrapper::attachCallback);
+@@ -645,12 +646,30 @@ palStatus_t pal_plat_socket(palSocketDomain_t domain, palSocketType_t type, bool
+ 
+     if ((s_pal_numberOFInterfaces > interfaceNum) && (PAL_SOCK_DGRAM == type) && ((PAL_AF_INET == domain) || (PAL_AF_INET6 == domain) || (PAL_AF_UNSPEC == domain))) // check correct parameters for UDP socket
+     {
+-        internalSocket = new UDPSocket(s_pal_networkInterfacesSupported[interfaceNum]);
++        // Mbed CE creates sockets uninitialised and opens them on a stack
++        // (netsocket/UDPSocket.h: "Must call open to initialize the socket on a
++        // network stack"). The interface PAL registered for this socket is the one to
++        // open it on, and CE's own `InternetSocket::open(S *stack)` template
++        // (netsocket/InternetSocket.h:60) converts a NetworkInterface* to its
++        // NetworkStack* via `nsapi_create_stack` (netsocket/NetworkStack.h:550) - which
++        // is what lets a PAL translation unit avoid the *protected*
++        // NetworkInterface::get_stack() (netsocket/NetworkInterface.h:515). The open()
++        // is functional, not cosmetic: an unopened socket has no stack and every
++        // bind/send on it fails.
++        UDPSocket *udpSocket = new UDPSocket();
++        udpSocket->open(s_pal_networkInterfacesSupported[interfaceNum]);
++        internalSocket = udpSocket;
+     }
+ #if PAL_NET_TCP_AND_TLS_SUPPORT // functionality below supported only in case TCP is supported.
+     else if ((s_pal_numberOFInterfaces > interfaceNum) && (PAL_SOCK_STREAM == type) && ((PAL_AF_INET == domain) || (PAL_AF_INET6 == domain) || (PAL_AF_UNSPEC == domain))) // check correct parameters for TCP socket
+     {
+-        internalSocket = new TCPSocket(s_pal_networkInterfacesSupported[interfaceNum]);
++        // Same CE form as the UDP branch above: create uninitialised, then open on
++        // the registered interface's stack (InternetSocket::open(S*) ->
++        // nsapi_create_stack). The TCP-server branch below is the one CE form this
++        // file already had, because TCPServer's constructor takes an interface.
++        TCPSocket *tcpSocket = new TCPSocket();
++        tcpSocket->open(s_pal_networkInterfacesSupported[interfaceNum]);
++        internalSocket = tcpSocket;
+     }
+ #ifndef TARGET_SIMULATOR
+     else if ((s_pal_numberOFInterfaces > interfaceNum) && (PAL_SOCK_STREAM_SERVER == type) && ((PAL_AF_INET == domain) || (PAL_AF_INET6 == domain) || (PAL_AF_UNSPEC == domain))) // check correct parameters for TCP Server socket
+@@ -912,14 +931,16 @@ palStatus_t pal_plat_getNumberOfNetInterfaces( uint32_t* numInterfaces)
+ palStatus_t pal_plat_getNetInterfaceInfo(uint32_t interfaceNum, palNetInterfaceInfo_t * interfaceInfo)
+ {
+     palStatus_t result = PAL_SUCCESS;
+-    const char* address = NULL;
+     SocketAddress addr;
+     PAL_VALIDATE_ARGUMENTS((interfaceNum >= s_pal_numberOFInterfaces));
+ 
+-    address = s_pal_networkInterfacesSupported[interfaceNum]->get_ip_address(); // ip address returned is a null terminated string
+-    if (NULL != address)
++    // Mbed CE's NetworkInterface::get_ip_address(SocketAddress *) fills an
++    // out-parameter and returns a status; OS 5's returned a null-terminated
++    // string (null until the interface connected). An interface with no address
++    // therefore leaves interfaceInfo untouched and the result at PAL_SUCCESS,
++    // exactly as the null-string case did.
++    if (s_pal_networkInterfacesSupported[interfaceNum]->get_ip_address(&addr) == NSAPI_ERROR_OK)
+     {
+-        addr.set_ip_address(address);
+ #if (PAL_DNS_API_VERSION != 2)
+         result = socketAddressToPalSockAddr(addr, &interfaceInfo->address, &interfaceInfo->addressSize);
+ #else
+@@ -1123,12 +1144,30 @@ palStatus_t pal_plat_asynchronousSocket(palSocketDomain_t domain, palSocketType_
+ 
+     if ((s_pal_numberOFInterfaces > interfaceNum) && (PAL_SOCK_DGRAM == type) && ((PAL_AF_INET == domain) || (PAL_AF_INET6 == domain) || (PAL_AF_UNSPEC == domain))) //check that we got correct parameters for UDP socket
+     {
+-        internalSocket = new UDPSocket(s_pal_networkInterfacesSupported[interfaceNum]);
++        // Mbed CE creates sockets uninitialised and opens them on a stack
++        // (netsocket/UDPSocket.h: "Must call open to initialize the socket on a
++        // network stack"). The interface PAL registered for this socket is the one to
++        // open it on, and CE's own `InternetSocket::open(S *stack)` template
++        // (netsocket/InternetSocket.h:60) converts a NetworkInterface* to its
++        // NetworkStack* via `nsapi_create_stack` (netsocket/NetworkStack.h:550) - which
++        // is what lets a PAL translation unit avoid the *protected*
++        // NetworkInterface::get_stack() (netsocket/NetworkInterface.h:515). The open()
++        // is functional, not cosmetic: an unopened socket has no stack and every
++        // bind/send on it fails.
++        UDPSocket *udpSocket = new UDPSocket();
++        udpSocket->open(s_pal_networkInterfacesSupported[interfaceNum]);
++        internalSocket = udpSocket;
+     }
+ #if PAL_NET_TCP_AND_TLS_SUPPORT // functionality below supported only in case TCP is supported.
+     else if ((s_pal_numberOFInterfaces > interfaceNum) && (PAL_SOCK_STREAM == type) && ((PAL_AF_INET == domain) || (PAL_AF_INET6 == domain) || (PAL_AF_UNSPEC == domain))) //check that we got correct parameters for TCP socket
+     {
+-        internalSocket = new TCPSocket(s_pal_networkInterfacesSupported[interfaceNum]);
++        // Same CE form as the UDP branch above: create uninitialised, then open on
++        // the registered interface's stack (InternetSocket::open(S*) ->
++        // nsapi_create_stack). The TCP-server branch below is the one CE form this
++        // file already had, because TCPServer's constructor takes an interface.
++        TCPSocket *tcpSocket = new TCPSocket();
++        tcpSocket->open(s_pal_networkInterfacesSupported[interfaceNum]);
++        internalSocket = tcpSocket;
+     }
+ #ifndef TARGET_SIMULATOR
+     else if ((s_pal_numberOFInterfaces > interfaceNum) && (PAL_SOCK_STREAM_SERVER == type) && ((PAL_AF_INET == domain) || (PAL_AF_INET6 == domain) || (PAL_AF_UNSPEC == domain))) //check that we got correct parameters for TCP Server socket
+diff --git a/mbed-client/mbed-client-c/source/sn_nsdl.c b/mbed-client/mbed-client-c/source/sn_nsdl.c
+index 11af2e2..94297cc 100755
+--- a/mbed-client/mbed-client-c/source/sn_nsdl.c
++++ b/mbed-client/mbed-client-c/source/sn_nsdl.c
+@@ -2204,26 +2204,16 @@ int8_t sn_nsdl_remove_msg_from_retransmission(struct nsdl_s *handle, uint8_t *to
+     }
+ 
+ #if ENABLE_RESENDINGS
+-    // Workaround until new "sn_coap_protocol_delete_retransmission_by_token" API is released
+-    // return sn_coap_protocol_delete_retransmission_by_token(handle->grs->coap, token, token_len);
+-    ns_list_foreach(coap_send_msg_s, stored_msg, &handle->grs->coap->linked_list_resent_msgs) {
+-        uint8_t stored_token_len =  (stored_msg->send_msg_ptr->packet_ptr[0] & 0x0F);
+-        if (stored_token_len == token_len) {
+-            uint8_t stored_token[8];
+-            memcpy(stored_token, &stored_msg->send_msg_ptr->packet_ptr[4], stored_token_len);
+-            if (memcmp(stored_token, token, stored_token_len) == 0) {
+-                uint16_t temp_msg_id = (stored_msg->send_msg_ptr->packet_ptr[2] << 8);
+-                temp_msg_id += (uint16_t)stored_msg->send_msg_ptr->packet_ptr[3];
+-                tr_debug("sn_nsdl_remove_msg_from_retransmission - removed msg_id: %d", temp_msg_id);
+-                ns_list_remove(&handle->grs->coap->linked_list_resent_msgs, stored_msg);
+-                --handle->grs->coap->count_resent_msgs;
+-
+-                handle->grs->coap->sn_coap_protocol_free(stored_msg->send_msg_ptr);
+-                handle->grs->coap->sn_coap_protocol_free(stored_msg);
+-
+-                return 0;
+-            }
+-        }
++    // The workaround that used to live here walked mbed-coap's private
++    // linked_list_resent_msgs, because the API it wanted did not exist yet ("until
++    // new sn_coap_protocol_delete_retransmission_by_token API is released").
++    // Mbed CE's mbed-coap - the copy this build links against - ships that API,
++    // and its coap_send_msg_s keeps the transmit struct by value where the version
++    // this file was written against kept a pointer, so the walk no longer
++    // type-checks and does not belong in this file either. Call the released API
++    // and keep this function's 0 / SN_NSDL_FAILURE contract.
++    if (sn_coap_protocol_delete_retransmission_by_token(handle->grs->coap, token, token_len) == 0) {
++        return 0;
+     }
+ #endif
+ 

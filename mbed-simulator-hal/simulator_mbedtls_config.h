@@ -117,6 +117,10 @@
 
 /* Symmetric modes. */
 #define MBEDTLS_CIPHER_MODE_CBC
+/* Added for the Pelion stack (T7); see the X509_CSR_WRITE_C note above.
+ * mbed-client-pal's crypto port and update-client-hub's arm_uc_crypto use
+ * mbedtls_aes_crypt_ctr(), which only exists with this module. */
+#define MBEDTLS_CIPHER_MODE_CTR
 #define MBEDTLS_CIPHER_PADDING_PKCS7
 #define MBEDTLS_REMOVE_ARC4_CIPHERSUITES
 #define MBEDTLS_REMOVE_3DES_CIPHERSUITES
@@ -188,6 +192,17 @@
 #define MBEDTLS_PEM_PARSE_C
 #define MBEDTLS_X509_USE_C
 #define MBEDTLS_X509_CRT_PARSE_C
+/* Added for the Pelion stack (T7): mbed-client-pal's mbedTLS crypto port builds
+ * a certificate signing request (pal_plat_CryptoCsrGenerate ->
+ * mbedtls_x509write_csr_*) and the update-client-hub MACs firmware images with
+ * AES-CTR (arm_uc_crypto -> mbedtls_aes_crypt_ctr). Neither module is in Mbed
+ * CE's bundled default; both are client-side primitives with no effect on TLS
+ * policy (no protocol version, cipher suite or verification change).
+ * X509_CREATE_C is X509_CSR_WRITE_C's prerequisite (check_config.h:810-814) -
+ * its own prerequisites (BIGNUM_C, OID_C, ASN1_WRITE_C, PK_WRITE_C) are all
+ * enabled here already. */
+#define MBEDTLS_X509_CREATE_C
+#define MBEDTLS_X509_CSR_WRITE_C
 
 /* Cipher, SSL and platform glue. */
 #define MBEDTLS_CIPHER_C

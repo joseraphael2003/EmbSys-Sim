@@ -33,10 +33,17 @@ static SingletonPtr<Timer> timer;
 static SingletonPtr<Timeout> timeout;
 
 // If critical sections are implemented using mutexes, timers must be called in thread context, and
-// we use the high-priority event queue for this.
-// If critical sections disable interrupts, we can call timers directly from interrupt. Avoiding the
-// event queue can save ~1600B of RAM if the rest of the system is not using the event queue either.
+// we bounce the callback through an event queue for this. If critical sections disable interrupts,
+// timers can be called directly from interrupt and the queue can be skipped (~1600B of RAM).
 // Caveats of this tunable are listed on arm_hal_interrupt.c.
+//
+// Mbed CE declares mbed_highprio_event_queue() only `#ifdef MBED_CONF_RTOS_PRESENT`
+// (events/include/events/mbed_shared_queues.h:84) - the high-priority queue is defined by its
+// dispatch *thread*'s priority, and this simulator is a documented no-RTOS build
+// (MBED_CONF_RTOS_PRESENT is deliberately left undefined; see T1's decisions). The queue this
+// substrate has is the shared application-dispatched one, which is also the one demos/peliondm
+// parks on, so the deferral keeps its meaning and loses only a thread priority that does not
+// exist here.
 #if !MBED_CONF_NANOSTACK_HAL_CRITICAL_SECTION_USABLE_FROM_INTERRUPT
 static EventQueue *equeue;
 #endif
@@ -48,7 +55,7 @@ static void (*arm_hal_callback)(void);
 void platform_timer_enable(void)
 {
 #if !MBED_CONF_NANOSTACK_HAL_CRITICAL_SECTION_USABLE_FROM_INTERRUPT
-    equeue = mbed_highprio_event_queue();
+    equeue = mbed_event_queue();
     MBED_ASSERT(equeue != NULL);
 #endif
     timer->start();

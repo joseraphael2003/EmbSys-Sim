@@ -283,16 +283,6 @@ const COMPONENTS = [
         ],
     },
     {
-        // Pelion user config headers (mbed_cloud_client_user_config.h) that
-        // mbed-coap's sn_config.h includes via MBED_CLIENT_USER_CONFIG_FILE.
-        // Only the header root is wired: the Pelion stack sources themselves
-        // are OS5-era and not ported yet (see NOT_YET_PORTED).
-        name: 'pelion-dm:config',
-        includes: [
-            'pelion-dm',
-        ],
-    },
-    {
         // nanopacket libservice string/Bits/List helpers (ip4tos/stoip4,
         // ns_list_*, ...). Only the four source subdirectories that netsocket,
         // mbed-coap and the demo libraries reference are in the closure; the
@@ -306,6 +296,12 @@ const COMPONENTS = [
             'mbed-os/connectivity/libraries/nanostack-libservice/source/libip6string',
         ],
         includes: [
+            // Both forms the tree includes by: the flat one ("ns_list.h") and
+            // the prefixed one ("mbed-client-libservice/common_functions.h",
+            // which is how mbed-cloud-client's source/CloudClientStorage.c and
+            // source/EstClient.cpp reach it). CE's own CMakeLists adds the
+            // library root, which is the parent of mbed-client-libservice.
+            'mbed-os/connectivity/libraries/nanostack-libservice',
             'mbed-os/connectivity/libraries/nanostack-libservice/mbed-client-libservice',
         ],
     },
@@ -508,6 +504,277 @@ const COMPONENTS = [
             '',
         ],
     },
+    // =======================================================================
+    // Pelion Device Management (the peliondm demo): the library, the
+    // mbed-cloud-client tree it wraps, and the simulator's own port layer.
+    //
+    // Appended after every other component on purpose: both trees carry their
+    // own copies of headers CE also ships, and the include list is ordered, so
+    // CE's roots must be searched first.
+    //
+    // The includes lists below are one walk's output (the same walk
+    // .t7-pelion-probe.js pre-validated all 181 translation units with):
+    // every directory under the two trees holding a .h/.hpp/.hh, minus the
+    // subtrees enumerated here. A subtree this manifest does not build must
+    // not be searched for headers either - an include root added only to
+    // satisfy a lookup can silently redirect a DIFFERENT translation unit to a
+    // stale twin, which is exactly what storage_helper.h below would do.
+    //
+    // Excluded subtrees, none of which is a `sources` entry:
+    //   * simple-mbed-cloud-client/storage_helper/ - a second storage_helper.h
+    //     with the SAME include guard (SIMPLEMBEDCLOUDCLIENT_STORAGEHELPER_H_)
+    //     but a different class: the library's takes (BlockDevice*, FileSystem*)
+    //     and pelion-dm's takes none. Under -DTARGET_SIMULATOR the library's own
+    //     #ifdef drops the (bd, fs) member and the (bd, fs) constructor call
+    //     (simple-mbed-cloud-client.cpp:66-72), so pelion-dm's variant is the
+    //     one this substrate needs - and with both on -I the search order would
+    //     silently pick one for BOTH translation units.
+    //   * mbed-client-pal/{Examples, Configs/pal_config/{FreeRTOS,Linux},
+    //     Source/Port/Reference-Impl/OS_Specific/{FreeRTOS,Linux},
+    //     Source/Port/Reference-Impl/OS_Specific/mbedOS/{RTOS,Storage,Update},
+    //     Test, Utils} - ports for other operating systems and boards plus the
+    //     vendor's own tests. mbedOS/Networking IS listed: it is the PAL
+    //     networking port this substrate uses.
+    //   * update-client-hub/modules/{common/stubs, lwm2m-mbed/stubs, pal-linux} -
+    //     alternative implementations of symbols their sibling source/
+    //     directories define (the stubs also include utest/, which is not in
+    //     this closure at all).
+    //   * nanostack-libservice/, mbed-coap/, mbed-trace/, mbed-client-randlib/ -
+    //     the four bundled copies of libraries CE ships and this manifest
+    //     already wires (mbed-os:nanostack-libservice, mbed-os:mbed-coap,
+    //     mbed-os:mbed-trace, mbed-os:randlib). All 16 of the basenames they
+    //     offer overlap CE's roots; taking sources from one side and headers
+    //     from the other is the mbed_retarget.cpp trap.
+    //
+    // sal-stack-nanostack-eventloop/source/minar_hal_timer.cpp is IN the tree
+    // and defines platform_tick_timer_* - the same symbols as
+    // ns-hal-pal/arm_hal_timer.cpp - but its whole body sits under
+    // `#if defined(NS_EVENTLOOP_USE_TICK_TIMER) && defined(YOTTA_CFG_MINAR)`
+    // and CE's eventloop_config.h `#undef`s the first, so it contributes
+    // nothing and is not a second definition.
+    // =======================================================================
+    {
+        // The Pelion Device Management client library itself. Four of the five
+        // translation units are the library proper; update_ui_example.cpp is here
+        // because MBED_CLOUD_CLIENT_SUPPORT_UPDATE is defined (see
+        // pelion-dm/mbed_cloud_client_user_config.h) and the library therefore
+        // calls update_ui_set_cloud_client() and
+        // set_update_authorize_handler(update_authorize) - both of which only that
+        // file defines. SIMULATOR_Legacy-Fixed/ built exactly this way: its
+        // .simignore excludes neither of them and its copy of the user config
+        // header is byte-identical to ours, so firmware-update support is a
+        // property of this simulator, not a define this task introduced.
+        // Not wired: memory_tests.cpp (defines m2mobject_test_set and friends, which
+        // nothing in the closure references) and storage_helper/ (see above).
+        name: 'simple-mbed-cloud-client',
+        files: [
+            'simple-mbed-cloud-client/simple-mbed-cloud-client.cpp',
+            'simple-mbed-cloud-client/resource.cpp',
+            'simple-mbed-cloud-client/mbed_cloud_client_resource.cpp',
+            'simple-mbed-cloud-client/pal_plat_rot_insecure.c',
+            'simple-mbed-cloud-client/update_ui_example.cpp',
+        ],
+        includes: [
+            'simple-mbed-cloud-client',
+        ],
+    },
+    {
+        // The mbed-cloud-client tree simple-mbed-cloud-client wraps: LwM2M client,
+        // PAL implementation + its mbedTLS and mbedOS-networking ports, the
+        // factory-configurator client, certificate enrollment, the nanostack
+        // eventloop, and update-client-hub. `sources` is recursive, so
+        // update-client-hub is enumerated per module instead of wholesale: its
+        // common/stubs, lwm2m-mbed/stubs and pal-linux subtrees are alternative
+        // implementations of symbols their sibling source/ directories define.
+        // Only ns-hal-pal/arm_hal_random.c is left out of ns-hal-pal/ - CE's own
+        // randlib component already defines the arm_hal_random_* symbols.
+        name: 'mbed-cloud-client',
+        sources: [
+            'simple-mbed-cloud-client/mbed-cloud-client-1/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-c/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-classic/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-mbed-tls/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Source/PAL-Impl',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Source/Port/Reference-Impl/Lib_Specific/mbedTLS',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Source/Port/Reference-Impl/OS_Specific/mbedOS/Networking',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/certificate-enrollment-client/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/sal-stack-nanostack-eventloop/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/atomic-queue/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/common/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/control-center/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/device-identity/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/firmware-manager/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/lwm2m-mbed/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/manifest-manager/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/paal/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-blockdevice/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-filesystem/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-target-specific/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/resume-engine/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-http/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-http-socket/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-manager/source',
+        ],
+        files: [
+            'simple-mbed-cloud-client/mbed-cloud-client-1/ns-hal-pal/arm_hal_interrupt.c',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/ns-hal-pal/arm_hal_timer.cpp',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/ns-hal-pal/ns_event_loop.c',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/ns-hal-pal/ns_hal_init.c',
+        ],
+        includes: [
+            'simple-mbed-cloud-client/mbed-cloud-client-1/certificate-enrollment-client/certificate-enrollment-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/certificate-enrollment-client/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/crypto-service/crypto-service',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/crypto-service/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/factory-configurator-client/factory-configurator-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/factory-configurator-client/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/fcc-bundle-handler/fcc-bundle-handler',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/fcc-bundle-handler/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/fcc-output-info-handler/fcc-output-info-handler',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/ftcd-comm-base/ftcd-comm-base',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/ftcd-comm-serial/ftcd-comm-serial',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/ftcd-comm-socket/ftcd-comm-socket',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/key-config-manager/key-config-manager',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/key-config-manager/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/logger/logger',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/mbed-client-esfs/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/mbed-client-esfs/source/sotp',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/mbed-trace-helper/mbed-trace-helper',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/secsrv-cbor/secsrv-cbor',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/storage/storage',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/utils/utils',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-c/nsdl-c',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-c/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-classic/mbed-client-classic',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-mbed-tls/mbed-client-mbedtls',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Configs/mbedTLS',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Configs/pal_config',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Configs/pal_config/mbedOS',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Configs/pal_config/mbedOS/TARGET_NUCLEO_F429ZI',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Configs/pal_config/mbedOS/TARGET_UBLOX_C030_U201',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Configs/pal_config/mbedOS/TARGET_UBLOX_EVK_ODIN_W2',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Source/PAL-Impl/Services-API',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Source/Port/Platform-API',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-cloud-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/ns-hal-pal',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/sal-stack-nanostack-eventloop/nanostack-event-loop',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/sal-stack-nanostack-eventloop/nanostack-event-loop/platform',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/sal-stack-nanostack-eventloop/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/source/include',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/atomic-queue/atomic-queue',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/atomic-queue/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/common/update-client-common',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/control-center/update-client-control-center',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/device-identity/pal4life-device-identity',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/firmware-manager/update-client-firmware-manager',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/lwm2m-mbed/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/lwm2m-mbed/update-client-lwm2m',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/manifest-manager/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/manifest-manager/update-client-manifest-manager',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/monitor/update-client-monitor',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/paal/update-client-paal',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-blockdevice/update-client-pal-blockdevice',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-filesystem/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-filesystem/update-client-pal-filesystem',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-flashiap/update-client-pal-flashiap',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-target-specific/update-client-pal-target-specific',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/resume-engine/update-client-resume-engine',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source/update-client-source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-http/update-client-source-http',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-http-socket/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-http-socket/update-client-source-http-socket',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-manager/update-client-source-manager',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/update-client-hub',
+            'simple-mbed-cloud-client/mbed-cloud-client-1',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/certificate-enrollment-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/certificate-enrollment-client/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/crypto-service',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/crypto-service/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/factory-configurator-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/factory-configurator-client/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/fcc-bundle-handler',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/fcc-bundle-handler/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/fcc-output-info-handler',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/ftcd-comm-base',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/ftcd-comm-serial',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/ftcd-comm-socket',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/key-config-manager',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/key-config-manager/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/logger',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/mbed-client-esfs/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/mbed-trace-helper',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/secsrv-cbor',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/storage',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/factory-configurator-client/utils',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Configs',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Source/PAL-Impl',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client-pal/Source/Port',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-c',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-c/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-classic',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/mbed-client-mbed-tls',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/mbed-client/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/sal-stack-nanostack-eventloop',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/atomic-queue',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/common',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/control-center',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/device-identity',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/firmware-manager',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/lwm2m-mbed',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/manifest-manager',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/monitor',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/paal',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-blockdevice',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-filesystem',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-flashiap',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/pal-target-specific',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/resume-engine',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-http',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-http-socket',
+            'simple-mbed-cloud-client/mbed-cloud-client-1/update-client-hub/modules/source-manager',
+        ],
+    },
+    {
+        // The simulator's own port layer for the demo (this is where the legacy
+        // tree kept its copies too): the cooperative arm_hal_timer, the no-RTOS
+        // and no-POSIX PAL ports, the mock developer credentials, and the storage
+        // helper the library default-constructs under TARGET_SIMULATOR.
+        // 
+        // pelion-dm/pal_plat_rtos.cpp and pelion-dm/pal_plat_fileSystem.c are the
+        // chosen PAL OS ports. The losers are
+        // mbed-client-pal/Source/Port/Reference-Impl/OS_Specific/mbedOS/{RTOS/pal_plat_rtos.cpp,
+        // Storage/FileSystem/pal_plat_fileSystem.cpp} plus the FreeRTOS and Linux
+        // equivalents - they are OS5-RTOS and Linux-glibc ports, and they are
+        // listed nowhere in this manifest (not as sources, not in the excluded
+        // subtree list because that list only records what a walk skipped).
+        // This also merges the previous include-only pelion-dm:config component:
+        // its reason ("the Pelion stack sources are not ported yet") stopped being
+        // true the moment these files landed, and a second component for the same
+        // root would be a duplicate rather than a layering.
+        name: 'pelion-dm',
+        files: [
+            'pelion-dm/arm_hal_timer.cpp',
+            'pelion-dm/pal_plat_rtos.cpp',
+            'pelion-dm/pal_plat_fileSystem.c',
+            'pelion-dm/mbed_cloud_dev_credentials.c',
+            'pelion-dm/storage_helper/storage_helper.cpp',
+        ],
+        includes: [
+            'pelion-dm',
+            'pelion-dm/storage_helper',
+        ],
+    },
 ];
 
 // Components that belong to the simulator's component closure but whose
@@ -515,29 +782,66 @@ const COMPONENTS = [
 // task that owns the port) so the graph stays complete and auditable; they
 // contribute no sources/includes until they are wired into COMPONENTS above.
 const NOT_YET_PORTED = [
-    {
-        sourceRoot: 'simple-mbed-cloud-client',
-        task: 'T7 (peliondm demo)',
-        reason: 'OS5-era Pelion checkout with its own bundled PAL/mbed-client/update-client include trees',
-    },
-    {
-        sourceRoot: 'pelion-dm',
-        task: 'T7 (peliondm demo)',
-        reason: 'arm_hal_timer.cpp needs the removed platform/arm_hal_timer.h; the PAL port files need the simple-mbed-cloud-client include tree',
-    },
 ];
 
-// A component is either wired into COMPONENTS or listed above as deferred,
-// never both: when a source root is ported it must move between the two, and
-// this guard makes a half-done move fail at build time instead of leaving the
+// A component is either wired into COMPONENTS or listed as deferred, never
+// both: when a source root is ported it must move between the two, and this
+// guard makes a half-done move fail at build time instead of leaving the
 // manifest lying about the graph.
+//
+// The guard is structural rather than list-shaped on purpose. T7 emptied
+// NOT_YET_PORTED (every T2-era deferred root has now been either ported or
+// honestly closed), and a check that only fires while some list is non-empty
+// passes by being skipped as soon as that list empties - which is what
+// fetch-deps' component-closure list did, silently, for three tasks. So the
+// checks below run unconditionally:
+//
+//   1. every component has a name and no two share one;
+//   2. every declared `sources`/`files`/`includes` path exists. This is the
+//      check that would have caught the Pelion flashiap leak (a `sources`
+//      entry naming a subtree the walk had excluded) and catches the whole
+//      class of "root renamed or deleted, manifest still promises it";
+//   3. a root is wired or deferred, never both (T2's rule);
+//   4. a deferred root that is not in the tree is a lie about the graph.
+const componentNames = new Set();
 const declaredRoots = [];
+const missingPaths = [];
+
 for (const component of COMPONENTS) {
+    if (!component.name) {
+        throw new Error('a component in COMPONENTS has no name');
+    }
+    if (componentNames.has(component.name)) {
+        throw new Error(`two components are named '${component.name}'`);
+    }
+    componentNames.add(component.name);
+
     for (const dir of (component.sources || []).concat(component.files || [])) {
         declaredRoots.push({ component: component.name, root: dir });
     }
+    for (const rel of (component.sources || []).concat(component.files || [], component.includes || [])) {
+        if (!fs.existsSync(Path.join(halFolder, rel))) {
+            missingPaths.push(`${component.name}: ${rel || '.'}`);
+        }
+    }
 }
+
+if (missingPaths.length) {
+    throw new Error(`the component manifest declares ${missingPaths.length} path(s) that do not exist:\n` +
+        missingPaths.map((m) => `  - ${m}`).join('\n'));
+}
+
+const deferredRoots = new Set();
 for (const deferred of NOT_YET_PORTED) {
+    if (deferredRoots.has(deferred.sourceRoot)) {
+        throw new Error(`'${deferred.sourceRoot}' is listed twice in NOT_YET_PORTED`);
+    }
+    deferredRoots.add(deferred.sourceRoot);
+
+    if (!fs.existsSync(Path.join(halFolder, deferred.sourceRoot))) {
+        throw new Error(`NOT_YET_PORTED lists '${deferred.sourceRoot}', which does not exist in the tree`);
+    }
+
     const clash = declaredRoots.find(d => d.root === deferred.sourceRoot || d.root.indexOf(deferred.sourceRoot + '/') === 0);
     if (clash) {
         throw new Error(`Component '${clash.component}' wires '${clash.root}' while '${deferred.sourceRoot}' is still listed as NOT_YET_PORTED`);

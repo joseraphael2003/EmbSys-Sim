@@ -345,12 +345,19 @@ function materializeSubmodules(mbedOsDir) {
 
 const resolvedDirs = new Set();
 
+// Every resolved dependency name, collected for the orphan-patch check in
+// main(): a patch is applied by name prefix, so a patch matching no name here
+// is never applied anywhere.
+const resolvedDepNames = new Set();
+
 function resolveLib(libFile) {
     const parentDir = Path.dirname(libFile);
     const content = fs.readFileSync(libFile, 'utf-8');
     const { url, sha } = parseLib(content);
     const name = repoNameFromUrl(url) || Path.basename(libFile, '.lib');
     const destDir = Path.join(parentDir, name);
+
+    resolvedDepNames.add(name.toLowerCase());
 
     if (resolvedDirs.has(destDir)) return;
     resolvedDirs.add(destDir);
@@ -423,6 +430,37 @@ function main() {
     // The vendored simulator target is tracked in-repo, decoupled from the
     // mbed-os checkout; assert its HAL closure on every fetch.
     verifyComponentClosure('vendored targets/TARGET_SIMULATOR', VENDORED_TARGET_DIR, TARGET_SIMULATOR_CLOSURE);
+
+    // An orphan patch is a silent defect: `applyPatches` matches on the
+    // resolved dependency name, so a patch whose basename is prefixed by
+    // nothing in the graph is never applied, and the fetch still exits 0 -
+    // the tree then builds against unpatched vendor text (T7 found a patch
+    // named after the `.lib` file rather than the resolved repo: see
+    // issues.md). Checked by NAME, not by "was it applied", so it holds on the
+    // fast no-op path too, where no patch is applied at all.
+    let patchFiles = [];
+    try {
+        patchFiles = fs.readdirSync(PATCHES_DIR).filter(f => f.endsWith('.patch'));
+    }
+    catch (e) {
+        patchFiles = []; // no patches/ directory -> nothing to claim
+    }
+
+    const orphans = patchFiles.filter((pf) => {
+        const lower = pf.toLowerCase();
+        return ![...resolvedDepNames].some((name) => lower.startsWith(name + '-'));
+    });
+
+    if (orphans.length) {
+        throw new Error(`patches/ contains ${orphans.length} patch(es) that match no resolved dependency:\n` +
+            orphans.map((o) => `  - ${o}`).join('\n') + '\n' +
+            `resolved dependencies: ${[...resolvedDepNames].sort().join(', ')}\n` +
+            'A patch is applied only when its basename is prefixed by a resolved dependency name ' +
+            '(see patches/README.md); a patch that matches nothing is never applied, on this tree or any fresh one.');
+    }
+    if (patchFiles.length) {
+        log.push(`verified patches/: ${patchFiles.length}/${patchFiles.length} claimed by a resolved dependency`);
+    }
 
     fs.writeFileSync(CACHE_FILE, log.join('\n') + '\n');
     if (log.length) {

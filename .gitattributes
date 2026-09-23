@@ -1,0 +1,8 @@
+# Patch files are applied by `git apply` inside the fetched dependency trees,
+# where the checked-out sources are LF (git inside the emscripten container has
+# no autocrlf). On a Windows host with core.autocrlf=true a plain checkout
+# rewrites them to CRLF, and the patch then fails to apply against LF sources -
+# a fresh-clone failure with no local symptom, because a working tree that is
+# never re-checked out keeps whatever bytes it was written with.
+# `-text` disables EOL conversion for these files on every platform.
+patches/*.patch -text

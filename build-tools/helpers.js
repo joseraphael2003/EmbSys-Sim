@@ -164,6 +164,16 @@ const defaultBuildFlags = [
     '-DMBED_BUILD_TIMESTAMP=' + (Date.now() / 1000 | 0),
 
     // Pelion device management
+    //
+    // MBED_CONF_NANOSTACK_LIBSERVICE_PRESENT is CE's "this library is part of the
+    // build" macro for the component the manifest wires as
+    // mbed-os:nanostack-libservice (the same class of define as the
+    // MBED_CONF_EVENTS_PRESENT / MBED_CONF_NSAPI_PRESENT entries above, which
+    // this build also supplies by hand because it has no config generator).
+    // mbed_trace.h:72 uses it to default MBED_CONF_MBED_TRACE_FEA_IPV6 to 1, and
+    // without it mbed_trace_ipv6() is not declared - which is what
+    // mbed-client-classic/source/m2mconnectionhandlerpimpl.cpp:409 calls.
+    '-DMBED_CONF_NANOSTACK_LIBSERVICE_PRESENT=1',
     '-DARM_UC_USE_PAL_BLOCKDEVICE=1',
     '-DPAL_FS_MOUNT_POINT_PRIMARY=\"/IDBFS/pal\"',
     '-DMBED_CONF_EVENTS_SHARED_DISPATCH_FROM_APPLICATION=1',

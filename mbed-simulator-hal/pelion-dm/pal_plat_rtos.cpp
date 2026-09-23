@@ -42,7 +42,15 @@ palStatus_t pal_plat_RTOSDestroy(void)
 
 palStatus_t pal_plat_osDelay(uint32_t milliseconds)
 {
-    wait_ms(milliseconds);
+    // Mbed OS 6 removed wait_ms(); this is the repo's canonical replacement and
+    // reaches the same vendored cooperative yield (targets/TARGET_SIMULATOR
+    // thread_sleep_for -> emscripten_sleep), which is what a PAL delay has to do
+    // in this substrate: block the application, not the browser.
+    //
+    // The returned status is new: the file as vendored fell off the end of a
+    // non-void function, so every caller received an indeterminate palStatus_t.
+    ThisThread::sleep_for(std::chrono::milliseconds(milliseconds));
+    return PAL_SUCCESS;
 }
 
 uint64_t pal_plat_osKernelSysTick(void)

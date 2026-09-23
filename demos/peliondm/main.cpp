@@ -90,7 +90,11 @@ int main() {
 
     // mbed_trace_init();
 
-    printf("Connected to the network successfully. IP address: %s\n", net->get_ip_address());
+    // Mbed CE's NetworkInterface::get_ip_address() fills a SocketAddress and
+    // returns a status (OS 5 returned a string); same form as demos/tcpsocket.
+    SocketAddress ip;
+    net->get_ip_address(&ip);
+    printf("Connected to the network successfully. IP address: %s\n", ip.get_ip_address() ? ip.get_ip_address() : "None");
 
     // SimpleMbedCloudClient handles registering over LwM2M to Mbed Cloud
     SimpleMbedCloudClient client(net, &bd);
