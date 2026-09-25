@@ -18,8 +18,10 @@
     };
 
     BaseComponent.prototype.pinNameForPin = function(pin) {
+        // MbedJSHal.PinNames.boards is the one key whose value is not a pin
+        // number (it is the per-board maps); only numeric entries are pins.
         return Object.keys(MbedJSHal.PinNames).find(function(p) {
-            return MbedJSHal.PinNames[p] === pin;
+            return typeof MbedJSHal.PinNames[p] === 'number' && MbedJSHal.PinNames[p] === pin;
         }.bind(this));
     };
 

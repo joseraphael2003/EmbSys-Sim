@@ -35,19 +35,31 @@ let findPeripherals = async function() {
     };
 };
 
-let build = async function(outFile, extraArgs, verbose, includeDirectories, cFiles, peripherals, componentFiles) {
+let build = async function(outFile, extraArgs, verbose, includeDirectories, cFiles, peripherals, componentFiles, board) {
     let componentsOutName = Path.join(Path.dirname(outFile), Path.basename(outFile) + '.components');
 
     let builtinPeripherals = await findPeripherals();
     let components = {
         jshal: builtinPeripherals.hal.concat(componentFiles.jshal || []),
         jsui: builtinPeripherals.ui.concat(componentFiles.jsui || []),
-        peripherals: peripherals
+        peripherals: peripherals,
+        // Which board profile (profiles/boards.json) this application was
+        // compiled for. The viewer reads it to pick the board drawing, and it is
+        // the only record of the choice in the artifact: the enum the app was
+        // compiled against is the one PinNames.h selects with the define below,
+        // which never reaches the library (libmbed.a is built on the default
+        // board).
+        board: board ? board.board.id : null
     };
 
     let args = cFiles
         .concat(helpers.includeFlagsFirst(includeDirectories))
         .concat(helpers.nonIncludeBuildFlags)
+        // The board's define goes to the application compile only. libmbed.a is
+        // compiled without it (design (a)): 0 of the 171 library translation
+        // units that can see PinNames.h bind a pin value, so the app's enum may
+        // differ from the library's.
+        .concat(board && board.board.define ? [ '-D' + board.board.define ] : [])
         .concat(extraArgs)
         .concat(helpers.asyncifyFlags)
         // libmbed.a must be the last input on the link line so that wasm-ld
@@ -88,7 +100,7 @@ let build = async function(outFile, extraArgs, verbose, includeDirectories, cFil
     });
 }
 
-let buildDirectory = async function (inputDir, outFile, extraArgs, verbose) {
+let buildDirectory = async function (inputDir, outFile, extraArgs, verbose, board) {
     inputDir = Path.resolve(inputDir);
     outFile = Path.resolve(outFile);
 
@@ -163,21 +175,22 @@ let buildDirectory = async function (inputDir, outFile, extraArgs, verbose) {
                  includeDirectories,
                  cFiles,
                  simconfig.peripherals || [],
-                 { jshal: jshal, jsui: jsui });
+                 { jshal: jshal, jsui: jsui },
+                 board);
 }
 
-let buildFile = async function(inputFile, outFile, extraArgs, verbose) {
+let buildFile = async function(inputFile, outFile, extraArgs, verbose, board) {
     inputFile = Path.resolve(inputFile);
     outFile = Path.resolve(outFile);
 
     let includeDirectories = [ Path.dirname(inputFile) ].concat(await libmbed.getIncludeDirectories()).map(c => Path.resolve(c));;
     let cFiles = [ inputFile ].map(c => Path.resolve(c));
 
-    return build(outFile, extraArgs, verbose, includeDirectories, cFiles, [], {});
+    return build(outFile, extraArgs, verbose, includeDirectories, cFiles, [], {}, board);
 }
 
 module.exports = {
-    _build: async function(buildFn, input, outFile, extraArgs, verbose) {
+    _build: async function(buildFn, input, outFile, extraArgs, verbose, board) {
         // Always enter the component build. It is a fast no-op when the cache is
         // fresh (flag/config hash + per-TU -MMD dependencies + source mtimes)
         // and it is the only path that *applies* those invalidations: skipping
@@ -185,14 +198,14 @@ module.exports = {
         // stayed out of the linked archive.
         await libmbed.build(verbose);
 
-        await buildFn(input, outFile, extraArgs, verbose);
+        await buildFn(input, outFile, extraArgs, verbose, board);
     },
 
-    buildDirectory: function(inputDir, outFile, extraArgs, verbose) {
-        return module.exports._build(buildDirectory, inputDir, outFile, extraArgs, verbose);
+    buildDirectory: function(inputDir, outFile, extraArgs, verbose, board) {
+        return module.exports._build(buildDirectory, inputDir, outFile, extraArgs, verbose, board);
     },
 
-    buildFile: function(inputFile, outFile, extraArgs, verbose) {
-        return module.exports._build(buildFile, inputFile, outFile, extraArgs, verbose);
+    buildFile: function(inputFile, outFile, extraArgs, verbose, board) {
+        return module.exports._build(buildFile, inputFile, outFile, extraArgs, verbose, board);
     }
 };

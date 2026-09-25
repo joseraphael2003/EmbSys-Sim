@@ -120,7 +120,13 @@ document.querySelector('#select-component').onchange = function(e) {
         else {
             select.dataset.pin = pin;
 
-            Object.keys(MbedJSHal.PinNames).map(function(p) {
+            // MbedJSHal.PinNames.boards holds every board's map and is therefore
+            // the one key whose value is not a pin number - enumerate only the
+            // numeric entries, or the dropdown offers "boards" as a pin (whose
+            // value is an object).
+            Object.keys(MbedJSHal.PinNames).filter(function(p) {
+                return typeof MbedJSHal.PinNames[p] === 'number';
+            }).map(function(p) {
                 var opt = document.createElement('option');
                 opt.textContent = p;
                 opt.value = MbedJSHal.PinNames[p];

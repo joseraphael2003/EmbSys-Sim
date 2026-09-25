@@ -1,48 +1,208 @@
-// Created from targets/TARGET_SIMULATOR/PinNames.h
+// GENERATED FILE - DO NOT EDIT BY HAND.
+//
+// Source:      profiles/boards.json
+// Generator:   build-tools/generate-pinnames.js
+// Regenerate:  node build-tools/generate-pinnames.js
+// Verify:      node build-tools/generate-pinnames.js --check
+//
+// MbedJSHal.PinNames holds the ACTIVE board's pin name -> pin value map at
+// the top level (the default board: the board the running app was built for),
+// and every board's map is also kept under MbedJSHal.PinNames.boards so the
+// viewer can switch boards without a rebuild.
+//
+// `boards` is the only key of MbedJSHal.PinNames whose value is not a pin
+// number: code that enumerates the map (the pin dropdown in viewer.js, the
+// reverse lookup in components/base_component.js) has to skip non-numbers, or
+// it will offer "boards" as a pin.
 window.MbedJSHal = window.MbedJSHal || {};
-window.MbedJSHal.PinNames = {
-    'p5': 9,
-    'p6': 8,
-    'p7': 7,
-    'p8': 6,
-    'p9': 0,
-    'p10': 1,
-    'p11': 18,
-    'p12': 17,
-    'p13': 15,
-    'p14': 16,
-    'p15': 23,
-    'p16': 24,
-    'p17': 25,
-    'p18': 26,
-    'p19': 62,
-    'p20': 63,
-    'p21': 69,
-    'p22': 68,
-    'p23': 67,
-    'p24': 66,
-    'p25': 65,
-    'p26': 64,
-    'p27': 11,
-    'p28': 10,
-    'p29': 5,
-    'p30': 4,
 
-    'LED1': 50,
-    'LED2': 52,
-    'LED3': 53,
-    'LED4': 55,
+(function(boards) {
+    var active = boards.default;
 
-    'BUTTON1': 1337,
+    window.MbedJSHal.PinNames = {};
 
-    'I2C_SCL1': 1,
-    'I2C_SDA1': 0,
-    'I2C_SCL2': 11, // pin used by application board
-    'I2C_SDA2': 10, // pin used by application board
-    'I2C_SCL': 11,
-    'I2C_SDA': 10,
+    Object.keys(active).forEach(function(name) {
+        window.MbedJSHal.PinNames[name] = active[name];
+    });
 
-    'SPI_MOSI': 9,
-    'SPI_MISO': 8,
-    'SPI_SCK': 7
-};
+    window.MbedJSHal.PinNames.boards = boards;
+})({
+    'default': {
+        // mbed DIP pin names (the 26 GPIO pads of the physical 40-pin header)
+        'p5': 9,
+        'p6': 8,
+        'p7': 7,
+        'p8': 6,
+        'p9': 0,
+        'p10': 1,
+        'p11': 18,
+        'p12': 17,
+        'p13': 15,
+        'p14': 16,
+        'p15': 23,
+        'p16': 24,
+        'p17': 25,
+        'p18': 26,
+        'p19': 62,
+        'p20': 63,
+        'p21': 69,
+        'p22': 68,
+        'p23': 67,
+        'p24': 66,
+        'p25': 65,
+        'p26': 64,
+        'p27': 11,
+        'p28': 10,
+        'p29': 5,
+        'p30': 4,
+
+        // user LEDs and button (onboard parts, not header pads)
+        'LED1': 50,
+        'LED2': 52,
+        'LED3': 53,
+        'LED4': 55,
+        'BUTTON1': 1337,
+
+        // I2C and SPI role names
+        'I2C_SCL1': 1,
+        'I2C_SDA1': 0,
+        'I2C_SCL2': 11,
+        'I2C_SDA2': 10,
+        'I2C_SCL': 11,
+        'I2C_SDA': 10,
+        'SPI_MOSI': 9,
+        'SPI_MISO': 8,
+        'SPI_SCK': 7
+    },
+    'pico': {
+        // RP2040 GPIO pins (id = GPIO number, physical.pad = header pad)
+        'GP0': 0,
+        'GP1': 1,
+        'GP2': 2,
+        'GP3': 3,
+        'GP4': 4,
+        'GP5': 5,
+        'GP6': 6,
+        'GP7': 7,
+        'GP8': 8,
+        'GP9': 9,
+        'GP10': 10,
+        'GP11': 11,
+        'GP12': 12,
+        'GP13': 13,
+        'GP14': 14,
+        'GP15': 15,
+        'GP16': 16,
+        'GP17': 17,
+        'GP18': 18,
+        'GP19': 19,
+        'GP20': 20,
+        'GP21': 21,
+        'GP22': 22,
+        'GP26': 26,
+        'GP27': 27,
+        'GP28': 28,
+
+        // onboard LED pin (not pinned out on the Pico)
+        'GP25': 25,
+
+        // ADC channel names
+        'A0': 26,
+        'A1': 27,
+        'A2': 28,
+
+        // role names
+        'LED1': 25,
+        'BUTTON1': 22,
+        'I2C_SCL': 5,
+        'I2C_SDA': 4,
+        'SPI_SCK': 18,
+        'SPI_SCLK': 18,
+        'SPI_MOSI': 19,
+        'SPI_MISO': 16,
+        'SPI_CS': 17
+    },
+    'nucleo': {
+        // STM32 port pins (id = Mbed CE NUCLEO_F401RE value)
+        'PA_0': 0,
+        'PA_1': 1,
+        'PA_2': 2,
+        'PA_3': 3,
+        'PA_4': 4,
+        'PA_5': 5,
+        'PA_6': 6,
+        'PA_7': 7,
+        'PA_8': 8,
+        'PA_9': 9,
+        'PA_10': 10,
+        'PA_11': 11,
+        'PA_12': 12,
+        'PA_13': 13,
+        'PA_14': 14,
+        'PA_15': 15,
+        'PB_0': 16,
+        'PB_1': 17,
+        'PB_2': 18,
+        'PB_3': 19,
+        'PB_4': 20,
+        'PB_5': 21,
+        'PB_6': 22,
+        'PB_7': 23,
+        'PB_8': 24,
+        'PB_9': 25,
+        'PB_10': 26,
+        'PB_12': 28,
+        'PB_13': 29,
+        'PB_14': 30,
+        'PB_15': 31,
+        'PC_0': 32,
+        'PC_1': 33,
+        'PC_2': 34,
+        'PC_3': 35,
+        'PC_4': 36,
+        'PC_5': 37,
+        'PC_6': 38,
+        'PC_7': 39,
+        'PC_8': 40,
+        'PC_9': 41,
+        'PC_10': 42,
+        'PC_11': 43,
+        'PC_12': 44,
+        'PC_13': 45,
+        'PD_2': 50,
+
+        // Arduino Uno header names
+        'D0': 3,
+        'D1': 2,
+        'D2': 10,
+        'D3': 19,
+        'D4': 21,
+        'D5': 20,
+        'D6': 26,
+        'D7': 8,
+        'D8': 9,
+        'D9': 39,
+        'D10': 22,
+        'D11': 7,
+        'D12': 6,
+        'D13': 5,
+        'D14': 25,
+        'D15': 24,
+        'A0': 0,
+        'A1': 1,
+        'A2': 4,
+        'A3': 16,
+        'A4': 33,
+        'A5': 32,
+
+        // role names
+        'LED1': 5,
+        'BUTTON1': 45,
+        'I2C_SCL': 24,
+        'I2C_SDA': 25,
+        'SPI_SCK': 5,
+        'SPI_MOSI': 7,
+        'SPI_MISO': 6,
+        'SPI_CS': 4
+    }
+});

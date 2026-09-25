@@ -1,0 +1,2893 @@
+{
+    "version": 1,
+    "schema": {
+        "board": {
+            "id": "string, unique; becomes the value of `cli.js --board <id>` and of the `.components` manifest's \"board\" key",
+            "displayName": "human readable board name",
+            "mcu": "the SoC on the board",
+            "define": "the preprocessor macro the application build gets (-D<define>); null for the default board, which is what libmbed.a is compiled with",
+            "svgAsset": "the board drawing the viewer loads (null: not vendored yet)",
+            "pinGroups": "ordered groups of pins; the first group may use expandPorts instead of pins",
+            "expandPorts": "generates nameTemplate with {port}/{pin} for ports x pinFrom..pinTo, id = (port << idShift) | pin - the LPC1768 encoding, kept so the default board's values are unchanged",
+            "powerPads": "pads with no PinName (GND, VBUS, RUN, ...), for T9's board rendering",
+            "onboardPeripherals": "things soldered to the board (LEDs, buttons, the MCU itself), for T9's board rendering"
+        },
+        "pin": {
+            "name": "the name emitted in PinNames.h and (when `js`) in the JS map",
+            "id": "the pin's integer value - definitions only; unique per board",
+            "alias": "for an alias: the name of another pin in the same board, resolved transitively",
+            "js": "true = also emitted into the viewer's MbedJSHal.PinNames maps (default false)",
+            "role": "gpio | led | button | adc | console | nc | internal",
+            "functions": "alternate functions, transcribed from the SoC's Mbed CE pinmap",
+            "physical": "where the pad is: side (board-relative edge/block), pad (the pad's silk label), index (0-based position of the pad within that side; omitted when the order is not documented)",
+            "onboard": "id of the onboardPeripherals entry this pin drives",
+            "note": "free text, emitted as a comment in the generated header"
+        },
+        "powerPad": {
+            "label": "the pad's silk label",
+            "kind": "power | ground | control | reference | nc",
+            "physical": "same shape as a pin's physical",
+            "note": "free text"
+        },
+        "onboardPeripheral": {
+            "id": "stable id, unique per board",
+            "kind": "led | button | mcu | memory | connector | debug",
+            "label": "the silk label / documentation name",
+            "pin": "the PinName it is wired to, or null when it is not driven by a GPIO",
+            "svgId": "the element id in the board drawing, e.g. \"#led1\"",
+            "color": "for LEDs: the colour the part lights up with"
+        }
+    },
+    "boards": [
+        {
+            "id": "default",
+            "displayName": "mbed LPC1768 (simulator default)",
+            "mcu": "NXP LPC1768 (Arm Cortex-M3 @ 96 MHz)",
+            "define": null,
+            "svgAsset": "viewer/img/controller_mbed.svg",
+            "notes": [
+                "Selected by passing no --board / --board default, and that is the branch libmbed.a is compiled with, so this block must stay reachable with no TARGET_BOARD_* define at all.",
+                "Every name here is a name of the pre-T8 hand-written PinNames.h with the same integer value; that is verified by compiling a probe against both headers and diffing the printed values (T8 evidence log).",
+                "The Mbed CE MBED_LPC1768 target says LED1..LED4 = P1_18/P1_20/P1_21/P1_23 and CONSOLE_TX/CONSOLE_RX = P0_2/P0_3, which is exactly what this board emits as LED1..LED4 and USBTX/USBRX.",
+                "CONSOLE_TX/CONSOLE_RX are deliberately NOT enumerators here: Mbed CE's hal/include/hal/PinNameAliases.h does `#define USBTX CONSOLE_TX` unconditionally, and platform.h includes it, so a TU can see the header with that macro live. Today the macro renames the USBTX enumerator, which compiles; adding a second enumerator literally called CONSOLE_TX would make that a duplicate-enumerator error.",
+                "The non-GPIO pads of the physical 40-pin DIP (p1..p4 and p31..p40, i.e. power and ground) are not modelled: the simulator's header has never named them and no demo or exercise references them.",
+                "The `#ifdef MCB1700` LED variant of the pre-T8 header is gone: MCB1700 is defined nowhere in this repository (grep: it appears only in that one #ifdef), so its branch was unreachable and LED1..LED4 keep the values of the branch that was always taken."
+            ],
+            "pinGroups": [
+                {
+                    "label": "LPC1768 GPIO port pins (id = port << 5 | pin)",
+                    "expandPorts": {
+                        "nameTemplate": "P{port}_{pin}",
+                        "ports": [
+                            0,
+                            1,
+                            2,
+                            3,
+                            4
+                        ],
+                        "pinFrom": 0,
+                        "pinTo": 31,
+                        "idShift": 5,
+                        "role": "gpio"
+                    }
+                },
+                {
+                    "label": "mbed DIP pin names (the 26 GPIO pads of the physical 40-pin header)",
+                    "pins": [
+                        {
+                            "name": "p5",
+                            "alias": "P0_9",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p5",
+                                "index": 4
+                            }
+                        },
+                        {
+                            "name": "p6",
+                            "alias": "P0_8",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p6",
+                                "index": 5
+                            }
+                        },
+                        {
+                            "name": "p7",
+                            "alias": "P0_7",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p7",
+                                "index": 6
+                            }
+                        },
+                        {
+                            "name": "p8",
+                            "alias": "P0_6",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p8",
+                                "index": 7
+                            }
+                        },
+                        {
+                            "name": "p9",
+                            "alias": "P0_0",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p9",
+                                "index": 8
+                            }
+                        },
+                        {
+                            "name": "p10",
+                            "alias": "P0_1",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p10",
+                                "index": 9
+                            }
+                        },
+                        {
+                            "name": "p11",
+                            "alias": "P0_18",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p11",
+                                "index": 10
+                            }
+                        },
+                        {
+                            "name": "p12",
+                            "alias": "P0_17",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p12",
+                                "index": 11
+                            }
+                        },
+                        {
+                            "name": "p13",
+                            "alias": "P0_15",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p13",
+                                "index": 12
+                            }
+                        },
+                        {
+                            "name": "p14",
+                            "alias": "P0_16",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p14",
+                                "index": 13
+                            }
+                        },
+                        {
+                            "name": "p15",
+                            "alias": "P0_23",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p15",
+                                "index": 14
+                            }
+                        },
+                        {
+                            "name": "p16",
+                            "alias": "P0_24",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p16",
+                                "index": 15
+                            }
+                        },
+                        {
+                            "name": "p17",
+                            "alias": "P0_25",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p17",
+                                "index": 16
+                            }
+                        },
+                        {
+                            "name": "p18",
+                            "alias": "P0_26",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p18",
+                                "index": 17
+                            }
+                        },
+                        {
+                            "name": "p19",
+                            "alias": "P1_30",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p19",
+                                "index": 18
+                            }
+                        },
+                        {
+                            "name": "p20",
+                            "alias": "P1_31",
+                            "js": true,
+                            "physical": {
+                                "side": "left",
+                                "pad": "p20",
+                                "index": 19
+                            }
+                        },
+                        {
+                            "name": "p21",
+                            "alias": "P2_5",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p21",
+                                "index": 20
+                            }
+                        },
+                        {
+                            "name": "p22",
+                            "alias": "P2_4",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p22",
+                                "index": 21
+                            }
+                        },
+                        {
+                            "name": "p23",
+                            "alias": "P2_3",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p23",
+                                "index": 22
+                            }
+                        },
+                        {
+                            "name": "p24",
+                            "alias": "P2_2",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p24",
+                                "index": 23
+                            }
+                        },
+                        {
+                            "name": "p25",
+                            "alias": "P2_1",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p25",
+                                "index": 24
+                            }
+                        },
+                        {
+                            "name": "p26",
+                            "alias": "P2_0",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p26",
+                                "index": 25
+                            }
+                        },
+                        {
+                            "name": "p27",
+                            "alias": "P0_11",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p27",
+                                "index": 26
+                            }
+                        },
+                        {
+                            "name": "p28",
+                            "alias": "P0_10",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p28",
+                                "index": 27
+                            }
+                        },
+                        {
+                            "name": "p29",
+                            "alias": "P0_5",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p29",
+                                "index": 28
+                            }
+                        },
+                        {
+                            "name": "p30",
+                            "alias": "P0_4",
+                            "js": true,
+                            "physical": {
+                                "side": "right",
+                                "pad": "p30",
+                                "index": 29
+                            }
+                        }
+                    ]
+                },
+                {
+                    "label": "user LEDs and button (onboard parts, not header pads)",
+                    "pins": [
+                        {
+                            "name": "LED1",
+                            "alias": "P1_18",
+                            "js": true,
+                            "role": "led",
+                            "onboard": "led1"
+                        },
+                        {
+                            "name": "LED2",
+                            "alias": "P1_20",
+                            "js": true,
+                            "role": "led",
+                            "onboard": "led2"
+                        },
+                        {
+                            "name": "LED3",
+                            "alias": "P1_21",
+                            "js": true,
+                            "role": "led",
+                            "onboard": "led3"
+                        },
+                        {
+                            "name": "LED4",
+                            "alias": "P1_23",
+                            "js": true,
+                            "role": "led",
+                            "onboard": "led4"
+                        },
+                        {
+                            "name": "BUTTON1",
+                            "id": 1337,
+                            "js": true,
+                            "role": "button",
+                            "onboard": "button1",
+                            "note": "hope this is not used yet"
+                        },
+                        {
+                            "name": "SW1",
+                            "alias": "BUTTON1",
+                            "role": "button",
+                            "note": "legacy alias of BUTTON1"
+                        },
+                        {
+                            "name": "BUTTON2",
+                            "id": 1338,
+                            "role": "button",
+                            "note": "hope this is not used yet"
+                        },
+                        {
+                            "name": "SW2",
+                            "alias": "BUTTON2",
+                            "role": "button",
+                            "note": "legacy alias of BUTTON2"
+                        }
+                    ]
+                },
+                {
+                    "label": "console (USB serial) names",
+                    "pins": [
+                        {
+                            "name": "USBTX",
+                            "alias": "P0_2",
+                            "role": "console"
+                        },
+                        {
+                            "name": "USBRX",
+                            "alias": "P0_3",
+                            "role": "console"
+                        }
+                    ]
+                },
+                {
+                    "label": "Arduino-header names of the Arch Pro variant",
+                    "pins": [
+                        {
+                            "name": "D0",
+                            "alias": "P4_29"
+                        },
+                        {
+                            "name": "D1",
+                            "alias": "P4_28"
+                        },
+                        {
+                            "name": "D2",
+                            "alias": "P0_4"
+                        },
+                        {
+                            "name": "D3",
+                            "alias": "P0_5"
+                        },
+                        {
+                            "name": "D4",
+                            "alias": "P2_2"
+                        },
+                        {
+                            "name": "D5",
+                            "alias": "P2_3"
+                        },
+                        {
+                            "name": "D6",
+                            "alias": "P2_4"
+                        },
+                        {
+                            "name": "D7",
+                            "alias": "P2_5"
+                        },
+                        {
+                            "name": "D8",
+                            "alias": "P0_0"
+                        },
+                        {
+                            "name": "D9",
+                            "alias": "P0_1"
+                        },
+                        {
+                            "name": "D10",
+                            "alias": "P0_6"
+                        },
+                        {
+                            "name": "D11",
+                            "alias": "P0_9"
+                        },
+                        {
+                            "name": "D12",
+                            "alias": "P0_8"
+                        },
+                        {
+                            "name": "D13",
+                            "alias": "P0_7"
+                        },
+                        {
+                            "name": "D14",
+                            "alias": "P0_27"
+                        },
+                        {
+                            "name": "D15",
+                            "alias": "P0_28"
+                        },
+                        {
+                            "name": "A0",
+                            "alias": "P0_23"
+                        },
+                        {
+                            "name": "A1",
+                            "alias": "P0_24"
+                        },
+                        {
+                            "name": "A2",
+                            "alias": "P0_25"
+                        },
+                        {
+                            "name": "A3",
+                            "alias": "P0_26"
+                        },
+                        {
+                            "name": "A4",
+                            "alias": "P1_30"
+                        },
+                        {
+                            "name": "A5",
+                            "alias": "P1_31"
+                        }
+                    ]
+                },
+                {
+                    "label": "not connected",
+                    "pins": [
+                        {
+                            "name": "NC",
+                            "id": -1,
+                            "role": "nc",
+                            "note": "emitted as (int)0xFFFFFFFF; the generator requires this exact value on every board because gpio_api.c is the one library translation unit that compares a PinName against it"
+                        },
+                        {
+                            "name": "I2C_SCL0",
+                            "alias": "NC",
+                            "role": "i2c"
+                        },
+                        {
+                            "name": "I2C_SDA0",
+                            "alias": "NC",
+                            "role": "i2c"
+                        }
+                    ]
+                },
+                {
+                    "label": "I2C and SPI role names",
+                    "pins": [
+                        {
+                            "name": "I2C_SCL1",
+                            "alias": "p10",
+                            "js": true,
+                            "role": "i2c"
+                        },
+                        {
+                            "name": "I2C_SDA1",
+                            "alias": "p9",
+                            "js": true,
+                            "role": "i2c"
+                        },
+                        {
+                            "name": "I2C_SCL2",
+                            "alias": "p27",
+                            "js": true,
+                            "role": "i2c",
+                            "note": "pin used by application board"
+                        },
+                        {
+                            "name": "I2C_SDA2",
+                            "alias": "p28",
+                            "js": true,
+                            "role": "i2c",
+                            "note": "pin used by application board"
+                        },
+                        {
+                            "name": "I2C_SCL",
+                            "alias": "I2C_SCL2",
+                            "js": true,
+                            "role": "i2c"
+                        },
+                        {
+                            "name": "I2C_SDA",
+                            "alias": "I2C_SDA2",
+                            "js": true,
+                            "role": "i2c"
+                        },
+                        {
+                            "name": "SPI_MOSI",
+                            "alias": "p5",
+                            "js": true,
+                            "role": "spi"
+                        },
+                        {
+                            "name": "SPI_MISO",
+                            "alias": "p6",
+                            "js": true,
+                            "role": "spi"
+                        },
+                        {
+                            "name": "SPI_SCK",
+                            "alias": "p7",
+                            "js": true,
+                            "role": "spi"
+                        }
+                    ]
+                }
+            ],
+            "powerPads": [],
+            "onboardPeripherals": [
+                {
+                    "id": "led1",
+                    "kind": "led",
+                    "label": "LED1",
+                    "pin": "LED1",
+                    "svgId": "#led1"
+                },
+                {
+                    "id": "led2",
+                    "kind": "led",
+                    "label": "LED2",
+                    "pin": "LED2",
+                    "svgId": "#led2"
+                },
+                {
+                    "id": "led3",
+                    "kind": "led",
+                    "label": "LED3",
+                    "pin": "LED3",
+                    "svgId": "#led3"
+                },
+                {
+                    "id": "led4",
+                    "kind": "led",
+                    "label": "LED4",
+                    "pin": "LED4",
+                    "svgId": "#led4"
+                },
+                {
+                    "id": "button1",
+                    "kind": "button",
+                    "label": "Button 1",
+                    "pin": "BUTTON1",
+                    "svgId": "#button1"
+                },
+                {
+                    "id": "u1",
+                    "kind": "mcu",
+                    "label": "LPC1768",
+                    "pin": null,
+                    "svgId": null
+                },
+                {
+                    "id": "usb1",
+                    "kind": "connector",
+                    "label": "USB (drag-and-drop programming + serial)",
+                    "pin": null,
+                    "svgId": null
+                }
+            ]
+        },
+        {
+            "id": "pico",
+            "displayName": "Raspberry Pi Pico (RP2040)",
+            "mcu": "Raspberry Pi RP2040 (dual Arm Cortex-M0+ @ 133 MHz)",
+            "define": "TARGET_BOARD_PICO",
+            "svgAsset": null,
+            "notes": [
+                "Mbed CE's own target for this board (mbed-os/targets/TARGET_RASPBERRYPI/TARGET_MCU_RP2/TARGET_MCU_RP2040/TARGET_RASPBERRY_PI_PICO/PinNames.h) names the GPIOs IO_0..IO_29 and defines LED1, I2C_SCL/SDA, SPI_SCLK/MOSI/MISO/CS and CONSOLE_TX/RX exactly as this board does; IO_n is kept as an alias so an application written against that target compiles here.",
+                "Pin ids are RP2040 GPIO numbers, except NC: nothing in the simulator's HAL decodes port << 5 | pin, it forwards the integer it was handed to MbedJSHal, so the id is free to be the GPIO number on this board.",
+                "physical.pad is the pad number printed on the board's 40-pin header (1..40); physical.index is that number minus one, i.e. the same 0-based position Mbed CE's PICO_P<n> aliases use - the PICO_P<n> aliases are copied verbatim from Mbed CE, which numbers them from zero.",
+                "GP25 drives the onboard LED. GP23, GP24 and GP29 are not pinned out (BUCK_REG_PWM_MODE, USB_VBUS_PRESENT, VSYS_MEAS).",
+                "The board has no GPIO-connected user button (BOOTSEL is tied to the flash chip select), so the standard BUTTON1 of the simulator's demos is wired to GP22 here: a real pad on the header, held down by the viewer's button on this virtual board.",
+                "LED2..LED4 do not exist on this board and are NC, which is Mbed's documented way to write DigitalOut on a board without that LED."
+            ],
+            "pinGroups": [
+                {
+                    "label": "RP2040 GPIO pins (id = GPIO number, physical.pad = header pad)",
+                    "pins": [
+                        {
+                            "name": "GP0",
+                            "id": 0,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_RX",
+                                "UART0_TX",
+                                "I2C0_SDA",
+                                "PWM0_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "1",
+                                "index": 0
+                            }
+                        },
+                        {
+                            "name": "GP1",
+                            "id": 1,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_CSn",
+                                "UART0_RX",
+                                "I2C0_SCL",
+                                "PWM0_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "2",
+                                "index": 1
+                            }
+                        },
+                        {
+                            "name": "GP2",
+                            "id": 2,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_SCK",
+                                "UART0_CTS",
+                                "I2C1_SDA",
+                                "PWM1_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "4",
+                                "index": 3
+                            }
+                        },
+                        {
+                            "name": "GP3",
+                            "id": 3,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_TX",
+                                "UART0_RTS",
+                                "I2C1_SCL",
+                                "PWM1_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "5",
+                                "index": 4
+                            }
+                        },
+                        {
+                            "name": "GP4",
+                            "id": 4,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_RX",
+                                "UART1_TX",
+                                "I2C0_SDA",
+                                "PWM2_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "6",
+                                "index": 5
+                            }
+                        },
+                        {
+                            "name": "GP5",
+                            "id": 5,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_CSn",
+                                "UART1_RX",
+                                "I2C0_SCL",
+                                "PWM2_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "7",
+                                "index": 6
+                            }
+                        },
+                        {
+                            "name": "GP6",
+                            "id": 6,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_SCK",
+                                "UART1_CTS",
+                                "I2C1_SDA",
+                                "PWM3_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "9",
+                                "index": 8
+                            }
+                        },
+                        {
+                            "name": "GP7",
+                            "id": 7,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_TX",
+                                "UART1_RTS",
+                                "I2C1_SCL",
+                                "PWM3_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "10",
+                                "index": 9
+                            }
+                        },
+                        {
+                            "name": "GP8",
+                            "id": 8,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_RX",
+                                "UART1_TX",
+                                "I2C0_SDA",
+                                "PWM4_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "11",
+                                "index": 10
+                            }
+                        },
+                        {
+                            "name": "GP9",
+                            "id": 9,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_CSn",
+                                "UART1_RX",
+                                "I2C0_SCL",
+                                "PWM4_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "12",
+                                "index": 11
+                            }
+                        },
+                        {
+                            "name": "GP10",
+                            "id": 10,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_SCK",
+                                "UART1_CTS",
+                                "I2C1_SDA",
+                                "PWM5_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "14",
+                                "index": 13
+                            }
+                        },
+                        {
+                            "name": "GP11",
+                            "id": 11,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_TX",
+                                "UART1_RTS",
+                                "I2C1_SCL",
+                                "PWM5_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "15",
+                                "index": 14
+                            }
+                        },
+                        {
+                            "name": "GP12",
+                            "id": 12,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_RX",
+                                "UART0_TX",
+                                "I2C0_SDA",
+                                "PWM6_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "16",
+                                "index": 15
+                            }
+                        },
+                        {
+                            "name": "GP13",
+                            "id": 13,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_CSn",
+                                "UART0_RX",
+                                "I2C0_SCL",
+                                "PWM6_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "17",
+                                "index": 16
+                            }
+                        },
+                        {
+                            "name": "GP14",
+                            "id": 14,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_SCK",
+                                "UART0_CTS",
+                                "I2C1_SDA",
+                                "PWM7_A"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "19",
+                                "index": 18
+                            }
+                        },
+                        {
+                            "name": "GP15",
+                            "id": 15,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI1_TX",
+                                "UART0_RTS",
+                                "I2C1_SCL",
+                                "PWM7_B"
+                            ],
+                            "physical": {
+                                "side": "left",
+                                "pad": "20",
+                                "index": 19
+                            }
+                        },
+                        {
+                            "name": "GP16",
+                            "id": 16,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_RX",
+                                "UART0_TX",
+                                "I2C0_SDA",
+                                "PWM0_A"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "21",
+                                "index": 20
+                            }
+                        },
+                        {
+                            "name": "GP17",
+                            "id": 17,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_CSn",
+                                "UART0_RX",
+                                "I2C0_SCL",
+                                "PWM0_B"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "22",
+                                "index": 21
+                            }
+                        },
+                        {
+                            "name": "GP18",
+                            "id": 18,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_SCK",
+                                "UART0_CTS",
+                                "I2C1_SDA",
+                                "PWM1_A"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "24",
+                                "index": 23
+                            }
+                        },
+                        {
+                            "name": "GP19",
+                            "id": 19,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_TX",
+                                "UART0_RTS",
+                                "I2C1_SCL",
+                                "PWM1_B"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "25",
+                                "index": 24
+                            }
+                        },
+                        {
+                            "name": "GP20",
+                            "id": 20,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_RX",
+                                "UART1_TX",
+                                "I2C0_SDA",
+                                "PWM2_A"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "26",
+                                "index": 25
+                            }
+                        },
+                        {
+                            "name": "GP21",
+                            "id": 21,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI0_CSn",
+                                "UART1_RX",
+                                "I2C0_SCL",
+                                "PWM2_B"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "27",
+                                "index": 26
+                            }
+                        },
+                        {
+                            "name": "GP22",
+                            "id": 22,
+                            "js": true,
+                            "role": "button",
+                            "functions": [
+                                "SPI0_SCK",
+                                "UART1_CTS",
+                                "I2C1_SDA",
+                                "PWM3_A"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "29",
+                                "index": 28
+                            },
+                            "onboard": "button1"
+                        },
+                        {
+                            "name": "GP26",
+                            "id": 26,
+                            "js": true,
+                            "role": "adc",
+                            "functions": [
+                                "SPI1_SCK",
+                                "UART1_CTS",
+                                "I2C1_SDA",
+                                "PWM5_A",
+                                "ADC0"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "31",
+                                "index": 30
+                            }
+                        },
+                        {
+                            "name": "GP27",
+                            "id": 27,
+                            "js": true,
+                            "role": "adc",
+                            "functions": [
+                                "SPI1_TX",
+                                "UART1_RTS",
+                                "I2C1_SCL",
+                                "PWM5_B",
+                                "ADC1"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "32",
+                                "index": 31
+                            }
+                        },
+                        {
+                            "name": "GP28",
+                            "id": 28,
+                            "js": true,
+                            "role": "adc",
+                            "functions": [
+                                "SPI1_RX",
+                                "UART0_TX",
+                                "I2C0_SDA",
+                                "PWM6_A",
+                                "ADC2"
+                            ],
+                            "physical": {
+                                "side": "right",
+                                "pad": "34",
+                                "index": 33
+                            }
+                        }
+                    ]
+                },
+                {
+                    "label": "onboard LED pin (not pinned out on the Pico)",
+                    "pins": [
+                        {
+                            "name": "GP25",
+                            "id": 25,
+                            "js": true,
+                            "role": "led",
+                            "functions": [
+                                "SPI1_CSn",
+                                "UART1_RX",
+                                "I2C0_SCL",
+                                "PWM4_B"
+                            ],
+                            "onboard": "led1",
+                            "note": "drives the onboard LED"
+                        }
+                    ]
+                },
+                {
+                    "label": "RP2040 internal-only GPIOs",
+                    "pins": [
+                        {
+                            "name": "GP23",
+                            "id": 23,
+                            "role": "internal",
+                            "functions": [
+                                "SPI0_TX",
+                                "UART1_RTS",
+                                "I2C1_SCL",
+                                "PWM3_B"
+                            ],
+                            "note": "SMPS power save / BUCK_REG_PWM_MODE, not pinned out"
+                        },
+                        {
+                            "name": "GP24",
+                            "id": 24,
+                            "role": "internal",
+                            "functions": [
+                                "SPI1_RX",
+                                "UART1_TX",
+                                "I2C0_SDA",
+                                "PWM4_A"
+                            ],
+                            "note": "USB_VBUS_PRESENT, not pinned out"
+                        },
+                        {
+                            "name": "GP29",
+                            "id": 29,
+                            "role": "internal",
+                            "functions": [
+                                "SPI1_CSn",
+                                "UART0_RX",
+                                "I2C0_SCL",
+                                "PWM6_B",
+                                "ADC3"
+                            ],
+                            "note": "VSYS_MEAS (VSYS/3), not pinned out; A3 is an alias of this pin"
+                        }
+                    ]
+                },
+                {
+                    "label": "Mbed CE IO_n names for the same GPIOs",
+                    "pins": [
+                        {
+                            "name": "IO_0",
+                            "alias": "GP0"
+                        },
+                        {
+                            "name": "IO_1",
+                            "alias": "GP1"
+                        },
+                        {
+                            "name": "IO_2",
+                            "alias": "GP2"
+                        },
+                        {
+                            "name": "IO_3",
+                            "alias": "GP3"
+                        },
+                        {
+                            "name": "IO_4",
+                            "alias": "GP4"
+                        },
+                        {
+                            "name": "IO_5",
+                            "alias": "GP5"
+                        },
+                        {
+                            "name": "IO_6",
+                            "alias": "GP6"
+                        },
+                        {
+                            "name": "IO_7",
+                            "alias": "GP7"
+                        },
+                        {
+                            "name": "IO_8",
+                            "alias": "GP8"
+                        },
+                        {
+                            "name": "IO_9",
+                            "alias": "GP9"
+                        },
+                        {
+                            "name": "IO_10",
+                            "alias": "GP10"
+                        },
+                        {
+                            "name": "IO_11",
+                            "alias": "GP11"
+                        },
+                        {
+                            "name": "IO_12",
+                            "alias": "GP12"
+                        },
+                        {
+                            "name": "IO_13",
+                            "alias": "GP13"
+                        },
+                        {
+                            "name": "IO_14",
+                            "alias": "GP14"
+                        },
+                        {
+                            "name": "IO_15",
+                            "alias": "GP15"
+                        },
+                        {
+                            "name": "IO_16",
+                            "alias": "GP16"
+                        },
+                        {
+                            "name": "IO_17",
+                            "alias": "GP17"
+                        },
+                        {
+                            "name": "IO_18",
+                            "alias": "GP18"
+                        },
+                        {
+                            "name": "IO_19",
+                            "alias": "GP19"
+                        },
+                        {
+                            "name": "IO_20",
+                            "alias": "GP20"
+                        },
+                        {
+                            "name": "IO_21",
+                            "alias": "GP21"
+                        },
+                        {
+                            "name": "IO_22",
+                            "alias": "GP22"
+                        },
+                        {
+                            "name": "IO_23",
+                            "alias": "GP23"
+                        },
+                        {
+                            "name": "IO_24",
+                            "alias": "GP24"
+                        },
+                        {
+                            "name": "IO_25",
+                            "alias": "GP25"
+                        },
+                        {
+                            "name": "IO_26",
+                            "alias": "GP26"
+                        },
+                        {
+                            "name": "IO_27",
+                            "alias": "GP27"
+                        },
+                        {
+                            "name": "IO_28",
+                            "alias": "GP28"
+                        },
+                        {
+                            "name": "IO_29",
+                            "alias": "GP29"
+                        }
+                    ]
+                },
+                {
+                    "label": "Mbed CE PICO_P<n> header aliases (n = physical.pad - 1, verbatim from Mbed CE's PICO target)",
+                    "pins": [
+                        {
+                            "name": "PICO_P0",
+                            "alias": "GP0"
+                        },
+                        {
+                            "name": "PICO_P1",
+                            "alias": "GP1"
+                        },
+                        {
+                            "name": "PICO_P4",
+                            "alias": "GP2"
+                        },
+                        {
+                            "name": "PICO_P5",
+                            "alias": "GP3"
+                        },
+                        {
+                            "name": "PICO_P6",
+                            "alias": "GP4"
+                        },
+                        {
+                            "name": "PICO_P7",
+                            "alias": "GP5"
+                        },
+                        {
+                            "name": "PICO_P9",
+                            "alias": "GP6"
+                        },
+                        {
+                            "name": "PICO_P10",
+                            "alias": "GP7"
+                        },
+                        {
+                            "name": "PICO_P11",
+                            "alias": "GP8"
+                        },
+                        {
+                            "name": "PICO_P12",
+                            "alias": "GP9"
+                        },
+                        {
+                            "name": "PICO_P14",
+                            "alias": "GP10"
+                        },
+                        {
+                            "name": "PICO_P15",
+                            "alias": "GP11"
+                        },
+                        {
+                            "name": "PICO_P16",
+                            "alias": "GP12"
+                        },
+                        {
+                            "name": "PICO_P17",
+                            "alias": "GP13"
+                        },
+                        {
+                            "name": "PICO_P19",
+                            "alias": "GP14"
+                        },
+                        {
+                            "name": "PICO_P20",
+                            "alias": "GP15"
+                        },
+                        {
+                            "name": "PICO_P21",
+                            "alias": "GP16"
+                        },
+                        {
+                            "name": "PICO_P22",
+                            "alias": "GP17"
+                        },
+                        {
+                            "name": "PICO_P24",
+                            "alias": "GP18"
+                        },
+                        {
+                            "name": "PICO_P25",
+                            "alias": "GP19"
+                        },
+                        {
+                            "name": "PICO_P26",
+                            "alias": "GP20"
+                        },
+                        {
+                            "name": "PICO_P27",
+                            "alias": "GP21"
+                        },
+                        {
+                            "name": "PICO_P29",
+                            "alias": "GP22"
+                        },
+                        {
+                            "name": "PICO_P31",
+                            "alias": "GP26"
+                        },
+                        {
+                            "name": "PICO_P32",
+                            "alias": "GP27"
+                        },
+                        {
+                            "name": "PICO_P34",
+                            "alias": "GP28"
+                        }
+                    ]
+                },
+                {
+                    "label": "ADC channel names",
+                    "pins": [
+                        {
+                            "name": "A0",
+                            "alias": "GP26",
+                            "js": true,
+                            "role": "adc"
+                        },
+                        {
+                            "name": "A1",
+                            "alias": "GP27",
+                            "js": true,
+                            "role": "adc"
+                        },
+                        {
+                            "name": "A2",
+                            "alias": "GP28",
+                            "js": true,
+                            "role": "adc"
+                        },
+                        {
+                            "name": "A3",
+                            "alias": "GP29",
+                            "role": "adc",
+                            "note": "VSYS/3 on the board, not pinned out"
+                        }
+                    ]
+                },
+                {
+                    "label": "console names (Mbed CE's Pico target uses CONSOLE_TX/RX, not USBTX/USBRX)",
+                    "pins": [
+                        {
+                            "name": "CONSOLE_TX",
+                            "alias": "GP0",
+                            "role": "console"
+                        },
+                        {
+                            "name": "CONSOLE_RX",
+                            "alias": "GP1",
+                            "role": "console"
+                        }
+                    ]
+                },
+                {
+                    "label": "not connected",
+                    "pins": [
+                        {
+                            "name": "NC",
+                            "id": -1,
+                            "role": "nc"
+                        },
+                        {
+                            "name": "ADC_TEMP",
+                            "id": 240,
+                            "role": "internal",
+                            "note": "RP2040 temperature sensor, ADC channel 4"
+                        }
+                    ]
+                },
+                {
+                    "label": "role names",
+                    "pins": [
+                        {
+                            "name": "LED1",
+                            "alias": "GP25",
+                            "js": true,
+                            "role": "led",
+                            "onboard": "led1"
+                        },
+                        {
+                            "name": "LED2",
+                            "alias": "NC",
+                            "role": "led",
+                            "note": "the Pico has one user LED"
+                        },
+                        {
+                            "name": "LED3",
+                            "alias": "NC",
+                            "role": "led",
+                            "note": "the Pico has one user LED"
+                        },
+                        {
+                            "name": "LED4",
+                            "alias": "NC",
+                            "role": "led",
+                            "note": "the Pico has one user LED"
+                        },
+                        {
+                            "name": "BUTTON1",
+                            "alias": "GP22",
+                            "js": true,
+                            "role": "button",
+                            "onboard": "button1",
+                            "note": "virtual: the Pico's only button is BOOTSEL, which is not a GPIO"
+                        },
+                        {
+                            "name": "I2C_SCL",
+                            "alias": "GP5",
+                            "js": true,
+                            "role": "i2c"
+                        },
+                        {
+                            "name": "I2C_SDA",
+                            "alias": "GP4",
+                            "js": true,
+                            "role": "i2c"
+                        },
+                        {
+                            "name": "SPI_SCK",
+                            "alias": "GP18",
+                            "js": true,
+                            "role": "spi"
+                        },
+                        {
+                            "name": "SPI_SCLK",
+                            "alias": "GP18",
+                            "js": true,
+                            "role": "spi",
+                            "note": "Mbed CE's spelling of SPI_SCK"
+                        },
+                        {
+                            "name": "SPI_MOSI",
+                            "alias": "GP19",
+                            "js": true,
+                            "role": "spi"
+                        },
+                        {
+                            "name": "SPI_MISO",
+                            "alias": "GP16",
+                            "js": true,
+                            "role": "spi"
+                        },
+                        {
+                            "name": "SPI_CS",
+                            "alias": "GP17",
+                            "js": true,
+                            "role": "spi"
+                        }
+                    ]
+                }
+            ],
+            "powerPads": [
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "left",
+                        "pad": "3",
+                        "index": 2
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "left",
+                        "pad": "8",
+                        "index": 7
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "left",
+                        "pad": "13",
+                        "index": 12
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "left",
+                        "pad": "18",
+                        "index": 17
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "right",
+                        "pad": "23",
+                        "index": 22
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "right",
+                        "pad": "28",
+                        "index": 27
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "right",
+                        "pad": "33",
+                        "index": 32
+                    },
+                    "note": "analog ground (AGND)"
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "right",
+                        "pad": "38",
+                        "index": 37
+                    }
+                },
+                {
+                    "label": "RUN",
+                    "kind": "control",
+                    "physical": {
+                        "side": "right",
+                        "pad": "30",
+                        "index": 29
+                    },
+                    "note": "reset, active low; pulls the RP2040 out of reset when high"
+                },
+                {
+                    "label": "ADC_VREF",
+                    "kind": "reference",
+                    "physical": {
+                        "side": "right",
+                        "pad": "35",
+                        "index": 34
+                    }
+                },
+                {
+                    "label": "3V3",
+                    "kind": "power",
+                    "physical": {
+                        "side": "right",
+                        "pad": "36",
+                        "index": 35
+                    },
+                    "note": "3V3(OUT), from the onboard SMPS"
+                },
+                {
+                    "label": "3V3_EN",
+                    "kind": "control",
+                    "physical": {
+                        "side": "right",
+                        "pad": "37",
+                        "index": 36
+                    },
+                    "note": "enables the onboard SMPS"
+                },
+                {
+                    "label": "VSYS",
+                    "kind": "power",
+                    "physical": {
+                        "side": "right",
+                        "pad": "39",
+                        "index": 38
+                    },
+                    "note": "1.8-5.5 V main input"
+                },
+                {
+                    "label": "VBUS",
+                    "kind": "power",
+                    "physical": {
+                        "side": "right",
+                        "pad": "40",
+                        "index": 39
+                    },
+                    "note": "micro-USB 5 V"
+                }
+            ],
+            "onboardPeripherals": [
+                {
+                    "id": "led1",
+                    "kind": "led",
+                    "label": "onboard LED",
+                    "pin": "LED1",
+                    "svgId": "#led1",
+                    "color": "green",
+                    "note": "GP25"
+                },
+                {
+                    "id": "button1",
+                    "kind": "button",
+                    "label": "BOOTSEL",
+                    "pin": null,
+                    "svgId": null,
+                    "note": "wired to the flash chip select, not a GPIO; hold while resetting to enter the UF2 bootloader"
+                },
+                {
+                    "id": "u1",
+                    "kind": "mcu",
+                    "label": "RP2040",
+                    "pin": null,
+                    "svgId": null
+                },
+                {
+                    "id": "u2",
+                    "kind": "memory",
+                    "label": "2 MB QSPI flash (W25Q16JV)",
+                    "pin": null,
+                    "svgId": null
+                },
+                {
+                    "id": "usb1",
+                    "kind": "connector",
+                    "label": "micro-USB B",
+                    "pin": null,
+                    "svgId": null
+                },
+                {
+                    "id": "debug1",
+                    "kind": "debug",
+                    "label": "3-pin SWD debug pads (SWCLK/GND/SWDIO)",
+                    "pin": null,
+                    "svgId": null
+                }
+            ]
+        },
+        {
+            "id": "nucleo",
+            "displayName": "ST Nucleo-F401RE",
+            "mcu": "ST STM32F401RET6 (Arm Cortex-M4F @ 84 MHz)",
+            "define": "TARGET_BOARD_NUCLEO",
+            "svgAsset": null,
+            "notes": [
+                "Pin names and ids are Mbed CE's NUCLEO_F401RE target values (PA_0..PA_15 = 0x00..0x0F, PB_0..PB_15 = 0x10..0x1F, PC_0..PC_15 = 0x20..0x2F, PD_2 = 0x32, PH_0/PH_1 = 0x70/0x71, ADC_TEMP/VREF/VBAT = 0xF0..0xF2, NC = -1), so an application written against that target compiles unchanged.",
+                "PB_11 does not exist on the STM32F401RE; PB_12 is the next pad after PB_10.",
+                "D0..D15 and A0..A5 are Mbed CE's ARDUINO_UNO_D*/A* values for this board, i.e. the Arduino Uno header of the Nucleo.",
+                "physical.side is the functional block: 'arduino-digital' (D0..D15), 'arduino-analog' (A0..A5), 'arduino-power' (the power block), 'morpho' (ST morpho connectors only). physical.index counts within the block and is present only where the pad order is documented (the Arduino header); the ST connector designators (CN5/CN6/CN8/CN9) and the morpho pad order are deliberately not asserted here.",
+                "LED1/PA_5 is the user LED silkscreened LD2, verified in Mbed CE's own pinmap for this board ('Connected to LD2 [Green Led]'); LED2..LED4 do not exist as user LEDs and are NC.",
+                "BUTTON1/PC_13 is the blue user button B1 (Mbed CE's PinNames.h comment: 'B1 [Blue PushButton]').",
+                "I2C_SCL/I2C_SDA are PB_8/PB_9 (I2C1 on the Arduino header's D15/D14) and SPI_SCK/MOSI/MISO/CS are PA_5/PA_7/PA_6/PA_4 (SPI1), all taken from Mbed CE's PinMap_I2C_*/PinMap_SPI_* tables for this target. PA_5 is both the user LED and SPI1_SCK, exactly as D13 is on an Arduino Uno."
+            ],
+            "pinGroups": [
+                {
+                    "label": "STM32 port pins (id = Mbed CE NUCLEO_F401RE value)",
+                    "pins": [
+                        {
+                            "name": "PA_0",
+                            "id": 0,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN0",
+                                "TIM2_CH1",
+                                "SYS_WKUP"
+                            ],
+                            "physical": {
+                                "side": "arduino-analog",
+                                "pad": "A0",
+                                "index": 0
+                            }
+                        },
+                        {
+                            "name": "PA_1",
+                            "id": 1,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN1",
+                                "TIM2_CH2"
+                            ],
+                            "physical": {
+                                "side": "arduino-analog",
+                                "pad": "A1",
+                                "index": 1
+                            }
+                        },
+                        {
+                            "name": "PA_2",
+                            "id": 2,
+                            "js": true,
+                            "role": "console",
+                            "functions": [
+                                "ADC1_IN2",
+                                "TIM2_CH3",
+                                "USART2_TX"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D1",
+                                "index": 1
+                            },
+                            "note": "STDIO_UART_TX"
+                        },
+                        {
+                            "name": "PA_3",
+                            "id": 3,
+                            "js": true,
+                            "role": "console",
+                            "functions": [
+                                "ADC1_IN3",
+                                "TIM2_CH4",
+                                "USART2_RX"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D0",
+                                "index": 0
+                            },
+                            "note": "STDIO_UART_RX"
+                        },
+                        {
+                            "name": "PA_4",
+                            "id": 4,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN4",
+                                "SPI1_SSEL"
+                            ],
+                            "physical": {
+                                "side": "arduino-analog",
+                                "pad": "A2",
+                                "index": 2
+                            }
+                        },
+                        {
+                            "name": "PA_5",
+                            "id": 5,
+                            "js": true,
+                            "role": "led",
+                            "functions": [
+                                "ADC1_IN5",
+                                "TIM2_CH1",
+                                "SPI1_SCK"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D13",
+                                "index": 13
+                            },
+                            "onboard": "led1",
+                            "note": "LD2 [green user LED]"
+                        },
+                        {
+                            "name": "PA_6",
+                            "id": 6,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN6",
+                                "TIM3_CH1",
+                                "SPI1_MISO"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D12",
+                                "index": 12
+                            }
+                        },
+                        {
+                            "name": "PA_7",
+                            "id": 7,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN7",
+                                "TIM1_CH1N",
+                                "TIM3_CH2",
+                                "SPI1_MOSI"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D11",
+                                "index": 11
+                            }
+                        },
+                        {
+                            "name": "PA_8",
+                            "id": 8,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM1_CH1",
+                                "I2C3_SCL"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D7",
+                                "index": 7
+                            }
+                        },
+                        {
+                            "name": "PA_9",
+                            "id": 9,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM1_CH2",
+                                "USART1_TX",
+                                "USB_FS_VBUS"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D8",
+                                "index": 8
+                            }
+                        },
+                        {
+                            "name": "PA_10",
+                            "id": 10,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM1_CH3",
+                                "USART1_RX",
+                                "USB_FS_ID"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D2",
+                                "index": 2
+                            }
+                        },
+                        {
+                            "name": "PA_11",
+                            "id": 11,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM1_CH4",
+                                "USART6_TX",
+                                "USB_FS_DM"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PA_11"
+                            }
+                        },
+                        {
+                            "name": "PA_12",
+                            "id": 12,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "USART6_RX",
+                                "USB_FS_DP"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PA_12"
+                            }
+                        },
+                        {
+                            "name": "PA_13",
+                            "id": 13,
+                            "js": true,
+                            "role": "debug",
+                            "functions": [
+                                "SYS_JTMS_SWDIO"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PA_13"
+                            }
+                        },
+                        {
+                            "name": "PA_14",
+                            "id": 14,
+                            "js": true,
+                            "role": "debug",
+                            "functions": [
+                                "SYS_JTCK_SWCLK"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PA_14"
+                            }
+                        },
+                        {
+                            "name": "PA_15",
+                            "id": 15,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM2_CH1",
+                                "SPI1_SSEL",
+                                "SYS_JTDI"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PA_15"
+                            }
+                        },
+                        {
+                            "name": "PB_0",
+                            "id": 16,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN8",
+                                "TIM1_CH2N",
+                                "TIM3_CH3"
+                            ],
+                            "physical": {
+                                "side": "arduino-analog",
+                                "pad": "A3",
+                                "index": 3
+                            }
+                        },
+                        {
+                            "name": "PB_1",
+                            "id": 17,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN9",
+                                "TIM1_CH3N",
+                                "TIM3_CH4"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PB_1"
+                            }
+                        },
+                        {
+                            "name": "PB_2",
+                            "id": 18,
+                            "js": true,
+                            "role": "gpio",
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PB_2"
+                            }
+                        },
+                        {
+                            "name": "PB_3",
+                            "id": 19,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM2_CH2",
+                                "SPI1_SCK",
+                                "I2C2_SDA",
+                                "SYS_JTDO_SWO"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D3",
+                                "index": 3
+                            }
+                        },
+                        {
+                            "name": "PB_4",
+                            "id": 20,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM3_CH1",
+                                "SPI1_MISO",
+                                "I2C3_SDA",
+                                "SYS_JTRST"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D5",
+                                "index": 5
+                            }
+                        },
+                        {
+                            "name": "PB_5",
+                            "id": 21,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM3_CH2",
+                                "SPI1_MOSI",
+                                "SPI3_MOSI"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D4",
+                                "index": 4
+                            }
+                        },
+                        {
+                            "name": "PB_6",
+                            "id": 22,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM4_CH1",
+                                "USART1_TX",
+                                "I2C1_SCL"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D10",
+                                "index": 10
+                            }
+                        },
+                        {
+                            "name": "PB_7",
+                            "id": 23,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM4_CH2",
+                                "USART1_RX",
+                                "I2C1_SDA"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PB_7"
+                            }
+                        },
+                        {
+                            "name": "PB_8",
+                            "id": 24,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM4_CH3",
+                                "TIM10_CH1",
+                                "I2C1_SCL"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D15",
+                                "index": 15
+                            }
+                        },
+                        {
+                            "name": "PB_9",
+                            "id": 25,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM4_CH4",
+                                "TIM11_CH1",
+                                "I2C1_SDA"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D14",
+                                "index": 14
+                            }
+                        },
+                        {
+                            "name": "PB_10",
+                            "id": 26,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM2_CH3",
+                                "SPI2_SCLK",
+                                "I2C2_SCL"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D6",
+                                "index": 6
+                            }
+                        },
+                        {
+                            "name": "PB_12",
+                            "id": 28,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI2_SSEL"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PB_12"
+                            }
+                        },
+                        {
+                            "name": "PB_13",
+                            "id": 29,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM1_CH1N",
+                                "SPI2_SCLK"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PB_13"
+                            }
+                        },
+                        {
+                            "name": "PB_14",
+                            "id": 30,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM1_CH2N",
+                                "SPI2_MISO"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PB_14"
+                            }
+                        },
+                        {
+                            "name": "PB_15",
+                            "id": 31,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM1_CH3N",
+                                "SPI2_MOSI"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PB_15"
+                            }
+                        },
+                        {
+                            "name": "PC_0",
+                            "id": 32,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN10"
+                            ],
+                            "physical": {
+                                "side": "arduino-analog",
+                                "pad": "A5",
+                                "index": 5
+                            }
+                        },
+                        {
+                            "name": "PC_1",
+                            "id": 33,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN11"
+                            ],
+                            "physical": {
+                                "side": "arduino-analog",
+                                "pad": "A4",
+                                "index": 4
+                            }
+                        },
+                        {
+                            "name": "PC_2",
+                            "id": 34,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN12",
+                                "SPI2_MISO"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_2"
+                            }
+                        },
+                        {
+                            "name": "PC_3",
+                            "id": 35,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN13",
+                                "SPI2_MOSI"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_3"
+                            }
+                        },
+                        {
+                            "name": "PC_4",
+                            "id": 36,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN14"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_4"
+                            }
+                        },
+                        {
+                            "name": "PC_5",
+                            "id": 37,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "ADC1_IN15"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_5"
+                            }
+                        },
+                        {
+                            "name": "PC_6",
+                            "id": 38,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM3_CH1",
+                                "USART6_TX"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_6"
+                            }
+                        },
+                        {
+                            "name": "PC_7",
+                            "id": 39,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM3_CH2",
+                                "USART6_RX"
+                            ],
+                            "physical": {
+                                "side": "arduino-digital",
+                                "pad": "D9",
+                                "index": 9
+                            }
+                        },
+                        {
+                            "name": "PC_8",
+                            "id": 40,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM3_CH3"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_8"
+                            }
+                        },
+                        {
+                            "name": "PC_9",
+                            "id": 41,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "TIM3_CH4",
+                                "I2C3_SDA"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_9"
+                            }
+                        },
+                        {
+                            "name": "PC_10",
+                            "id": 42,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI3_SCK"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_10"
+                            }
+                        },
+                        {
+                            "name": "PC_11",
+                            "id": 43,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI3_MISO"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_11"
+                            }
+                        },
+                        {
+                            "name": "PC_12",
+                            "id": 44,
+                            "js": true,
+                            "role": "gpio",
+                            "functions": [
+                                "SPI3_MOSI"
+                            ],
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_12"
+                            }
+                        },
+                        {
+                            "name": "PC_13",
+                            "id": 45,
+                            "js": true,
+                            "role": "button",
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PC_13"
+                            },
+                            "onboard": "button1",
+                            "note": "B1 [blue user button]"
+                        },
+                        {
+                            "name": "PC_14",
+                            "id": 46,
+                            "role": "internal",
+                            "functions": [
+                                "RCC_OSC32_IN"
+                            ],
+                            "note": "32 kHz crystal"
+                        },
+                        {
+                            "name": "PC_15",
+                            "id": 47,
+                            "role": "internal",
+                            "functions": [
+                                "RCC_OSC32_OUT"
+                            ],
+                            "note": "32 kHz crystal"
+                        },
+                        {
+                            "name": "PD_2",
+                            "id": 50,
+                            "js": true,
+                            "role": "gpio",
+                            "physical": {
+                                "side": "morpho",
+                                "pad": "PD_2"
+                            }
+                        },
+                        {
+                            "name": "PH_0",
+                            "id": 112,
+                            "role": "internal",
+                            "functions": [
+                                "RCC_OSC_IN"
+                            ],
+                            "note": "HSE crystal"
+                        },
+                        {
+                            "name": "PH_1",
+                            "id": 113,
+                            "role": "internal",
+                            "functions": [
+                                "RCC_OSC_OUT"
+                            ],
+                            "note": "HSE crystal"
+                        }
+                    ]
+                },
+                {
+                    "label": "Arduino Uno header names",
+                    "pins": [
+                        {
+                            "name": "D0",
+                            "alias": "PA_3",
+                            "js": true
+                        },
+                        {
+                            "name": "D1",
+                            "alias": "PA_2",
+                            "js": true
+                        },
+                        {
+                            "name": "D2",
+                            "alias": "PA_10",
+                            "js": true
+                        },
+                        {
+                            "name": "D3",
+                            "alias": "PB_3",
+                            "js": true
+                        },
+                        {
+                            "name": "D4",
+                            "alias": "PB_5",
+                            "js": true
+                        },
+                        {
+                            "name": "D5",
+                            "alias": "PB_4",
+                            "js": true
+                        },
+                        {
+                            "name": "D6",
+                            "alias": "PB_10",
+                            "js": true
+                        },
+                        {
+                            "name": "D7",
+                            "alias": "PA_8",
+                            "js": true
+                        },
+                        {
+                            "name": "D8",
+                            "alias": "PA_9",
+                            "js": true
+                        },
+                        {
+                            "name": "D9",
+                            "alias": "PC_7",
+                            "js": true
+                        },
+                        {
+                            "name": "D10",
+                            "alias": "PB_6",
+                            "js": true
+                        },
+                        {
+                            "name": "D11",
+                            "alias": "PA_7",
+                            "js": true
+                        },
+                        {
+                            "name": "D12",
+                            "alias": "PA_6",
+                            "js": true
+                        },
+                        {
+                            "name": "D13",
+                            "alias": "PA_5",
+                            "js": true
+                        },
+                        {
+                            "name": "D14",
+                            "alias": "PB_9",
+                            "js": true
+                        },
+                        {
+                            "name": "D15",
+                            "alias": "PB_8",
+                            "js": true
+                        },
+                        {
+                            "name": "A0",
+                            "alias": "PA_0",
+                            "js": true
+                        },
+                        {
+                            "name": "A1",
+                            "alias": "PA_1",
+                            "js": true
+                        },
+                        {
+                            "name": "A2",
+                            "alias": "PA_4",
+                            "js": true
+                        },
+                        {
+                            "name": "A3",
+                            "alias": "PB_0",
+                            "js": true
+                        },
+                        {
+                            "name": "A4",
+                            "alias": "PC_1",
+                            "js": true
+                        },
+                        {
+                            "name": "A5",
+                            "alias": "PC_0",
+                            "js": true
+                        }
+                    ]
+                },
+                {
+                    "label": "console names",
+                    "pins": [
+                        {
+                            "name": "CONSOLE_TX",
+                            "alias": "PA_2",
+                            "role": "console"
+                        },
+                        {
+                            "name": "CONSOLE_RX",
+                            "alias": "PA_3",
+                            "role": "console"
+                        }
+                    ]
+                },
+                {
+                    "label": "not connected / internal ADC channels",
+                    "pins": [
+                        {
+                            "name": "NC",
+                            "id": -1,
+                            "role": "nc"
+                        },
+                        {
+                            "name": "ADC_TEMP",
+                            "id": 240,
+                            "role": "internal",
+                            "functions": [
+                                "ADC1_IN16"
+                            ],
+                            "note": "internal temperature sensor"
+                        },
+                        {
+                            "name": "ADC_VREF",
+                            "id": 241,
+                            "role": "internal",
+                            "functions": [
+                                "ADC1_IN17"
+                            ],
+                            "note": "internal reference"
+                        },
+                        {
+                            "name": "ADC_VBAT",
+                            "id": 242,
+                            "role": "internal",
+                            "functions": [
+                                "ADC1_IN18"
+                            ],
+                            "note": "battery voltage"
+                        }
+                    ]
+                },
+                {
+                    "label": "role names",
+                    "pins": [
+                        {
+                            "name": "LED1",
+                            "alias": "PA_5",
+                            "js": true,
+                            "role": "led",
+                            "onboard": "led1",
+                            "note": "LD2"
+                        },
+                        {
+                            "name": "LED2",
+                            "alias": "NC",
+                            "role": "led",
+                            "note": "the board has one user LED"
+                        },
+                        {
+                            "name": "LED3",
+                            "alias": "NC",
+                            "role": "led",
+                            "note": "the board has one user LED"
+                        },
+                        {
+                            "name": "LED4",
+                            "alias": "NC",
+                            "role": "led",
+                            "note": "the board has one user LED"
+                        },
+                        {
+                            "name": "BUTTON1",
+                            "alias": "PC_13",
+                            "js": true,
+                            "role": "button",
+                            "onboard": "button1",
+                            "note": "B1"
+                        },
+                        {
+                            "name": "I2C_SCL",
+                            "alias": "PB_8",
+                            "js": true,
+                            "role": "i2c",
+                            "note": "I2C1 SCL, Arduino D15"
+                        },
+                        {
+                            "name": "I2C_SDA",
+                            "alias": "PB_9",
+                            "js": true,
+                            "role": "i2c",
+                            "note": "I2C1 SDA, Arduino D14"
+                        },
+                        {
+                            "name": "SPI_SCK",
+                            "alias": "PA_5",
+                            "js": true,
+                            "role": "spi",
+                            "note": "SPI1 SCK, Arduino D13"
+                        },
+                        {
+                            "name": "SPI_MOSI",
+                            "alias": "PA_7",
+                            "js": true,
+                            "role": "spi",
+                            "note": "SPI1 MOSI, Arduino D11"
+                        },
+                        {
+                            "name": "SPI_MISO",
+                            "alias": "PA_6",
+                            "js": true,
+                            "role": "spi",
+                            "note": "SPI1 MISO, Arduino D12"
+                        },
+                        {
+                            "name": "SPI_CS",
+                            "alias": "PA_4",
+                            "js": true,
+                            "role": "spi",
+                            "note": "SPI1 SSEL, Arduino A2"
+                        }
+                    ]
+                }
+            ],
+            "powerPads": [
+                {
+                    "label": "IOREF",
+                    "kind": "reference",
+                    "physical": {
+                        "side": "arduino-power",
+                        "pad": "IOREF"
+                    },
+                    "note": "Arduino power block: the pad order within the block is not asserted"
+                },
+                {
+                    "label": "RESET",
+                    "kind": "control",
+                    "physical": {
+                        "side": "arduino-power",
+                        "pad": "RESET"
+                    }
+                },
+                {
+                    "label": "3V3",
+                    "kind": "power",
+                    "physical": {
+                        "side": "arduino-power",
+                        "pad": "3V3"
+                    }
+                },
+                {
+                    "label": "5V",
+                    "kind": "power",
+                    "physical": {
+                        "side": "arduino-power",
+                        "pad": "5V"
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "arduino-power",
+                        "pad": "GND"
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "arduino-power",
+                        "pad": "GND"
+                    }
+                },
+                {
+                    "label": "VIN",
+                    "kind": "power",
+                    "physical": {
+                        "side": "arduino-power",
+                        "pad": "VIN"
+                    }
+                },
+                {
+                    "label": "NRST",
+                    "kind": "control",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "NRST"
+                    },
+                    "note": "ST morpho connectors"
+                },
+                {
+                    "label": "BOOT0",
+                    "kind": "control",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "BOOT0"
+                    }
+                },
+                {
+                    "label": "E5V",
+                    "kind": "power",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "E5V"
+                    }
+                },
+                {
+                    "label": "U5V",
+                    "kind": "power",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "U5V"
+                    }
+                },
+                {
+                    "label": "3V3",
+                    "kind": "power",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "3V3"
+                    }
+                },
+                {
+                    "label": "5V",
+                    "kind": "power",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "5V"
+                    }
+                },
+                {
+                    "label": "VIN",
+                    "kind": "power",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "VIN"
+                    }
+                },
+                {
+                    "label": "GND",
+                    "kind": "ground",
+                    "physical": {
+                        "side": "morpho",
+                        "pad": "GND"
+                    }
+                }
+            ],
+            "onboardPeripherals": [
+                {
+                    "id": "led1",
+                    "kind": "led",
+                    "label": "LD2 (green user LED)",
+                    "pin": "LED1",
+                    "svgId": "#led1",
+                    "color": "green"
+                },
+                {
+                    "id": "led2",
+                    "kind": "led",
+                    "label": "LD1 (USB communication LED)",
+                    "pin": null,
+                    "svgId": null,
+                    "note": "driven by the ST-Link, not by a GPIO"
+                },
+                {
+                    "id": "led3",
+                    "kind": "led",
+                    "label": "LD3 (power LED)",
+                    "pin": null,
+                    "svgId": null,
+                    "note": "hardwired to the 3V3 rail"
+                },
+                {
+                    "id": "button1",
+                    "kind": "button",
+                    "label": "B1 (blue user button)",
+                    "pin": "BUTTON1",
+                    "svgId": "#button1"
+                },
+                {
+                    "id": "button2",
+                    "kind": "button",
+                    "label": "B2 (black reset button)",
+                    "pin": null,
+                    "svgId": null,
+                    "note": "resets the MCU, not a GPIO"
+                },
+                {
+                    "id": "u1",
+                    "kind": "mcu",
+                    "label": "STM32F401RET6",
+                    "pin": null,
+                    "svgId": null
+                },
+                {
+                    "id": "u2",
+                    "kind": "debug",
+                    "label": "ST-Link/V2-1 (SWD + virtual COM port)",
+                    "pin": null,
+                    "svgId": null
+                },
+                {
+                    "id": "usb1",
+                    "kind": "connector",
+                    "label": "mini-USB B (on the ST-Link side)",
+                    "pin": null,
+                    "svgId": null
+                }
+            ]
+        }
+    ]
+}

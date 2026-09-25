@@ -6,3 +6,13 @@
 # never re-checked out keeps whatever bytes it was written with.
 # `-text` disables EOL conversion for these files on every platform.
 patches/*.patch -text
+
+# Both pin tables are generated (profiles/boards.json -> build-tools/generate-pinnames.js)
+# and `node build-tools/generate-pinnames.js --check` fails when the checked-in
+# file differs from what the generator produces. The generator emits LF; with
+# core.autocrlf=true (this machine, and any Windows contributor) a checkout
+# would rewrite the file to CRLF and the drift check would then report a
+# difference that is not one. `-text` keeps the bytes as generated, on every
+# platform, which is what makes that check meaningful.
+mbed-simulator-hal/targets/TARGET_SIMULATOR/PinNames.h -text
+viewer/js-hal/pinnames.js -text

@@ -8,6 +8,7 @@ const fs = require('fs');
 const Path = require('path');
 const helpers = require('./build-tools/helpers');
 const application = require('./build-tools/build-application');
+const pinnames = require('./build-tools/generate-pinnames');
 const opn = require('opn');
 const commandExistsSync = require('command-exists').sync;
 const launchServer = require('./server/launch-server');
@@ -27,6 +28,7 @@ program
     .option('-l --launch', 'Launch the simulator for this project after building (opens a browser)')
     .option('--launch-headless',  'Launch the simulator for this project after building in headless mode (pipes output to console)')
     .option('--scenario <file>', 'JSON assertion scenario to run in headless mode (steps: assert / read / action / reload / wait)')
+    .option('--board <name>', 'Board to compile the application for (profiles/boards.json; default: the LPC1768-style default board)')
     .option('--skip-build', 'Skip the build step (launch only)')
     .option('--disable-runtime-logs', 'Disable runtime logs (e.g. from the LoRa server or networking proxy)')
     .allowUnknownOption(true)
@@ -77,6 +79,22 @@ if (!program.outputFile) {
     }
     else {
         console.log(`Argument '--output-file' is required`);
+        process.exit(1);
+    }
+}
+
+// --board picks one descriptor out of profiles/boards.json. That file is also
+// what the generated PinNames.h and pinnames.js are built from, so a name that
+// is not in it cannot be compiled for: an unknown board is a hard error here
+// rather than a build that silently falls back to the default board's enum.
+let board = null;
+
+if (program.board) {
+    try {
+        board = pinnames.boardById(pinnames.loadBoards(), program.board);
+    }
+    catch (e) {
+        console.log(`Error: ${e.message}`);
         process.exit(1);
     }
 }
@@ -577,7 +595,7 @@ if (program.skipBuild) {
     fn = () => Promise.resolve();
 }
 
-fn(program.inputDir || program.inputFile, program.outputFile, extraArgs, program.verbose)
+fn(program.inputDir || program.inputFile, program.outputFile, extraArgs, program.verbose, board)
     .then(async function() {
         console.log('Building application succeeded, output file is', program.outputFile);
 

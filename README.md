@@ -194,6 +194,44 @@ To see if your program runs in the simulator, check the `TARGET_SIMULATOR` macro
 
 You can also run the simulator in headless mode, which is great for automated testing. All output (through `printf` and traces) will be routed to your terminal. To run in headless mode, add the `--launch-headless` option. You might also want to limit the amount of logging the server does through `--disable-runtime-logs` to keep the output clean.
 
+**Choosing the board**
+
+```
+$ mbed-simulator . --board pico
+```
+
+`--board <name>` compiles the application for one of the boards described in `profiles/boards.json`:
+
+| board | what it is |
+|---|---|
+| `default` | the mbed LPC1768-style board the viewer draws (this is what you get when `--board` is omitted) |
+| `pico` | Raspberry Pi Pico (RP2040) |
+| `nucleo` | ST Nucleo-F401RE |
+
+The names a program may use (`LED1`, `BUTTON1`, `p5`, `GP25`, `PA_5`, `D4`, ...) and their integer values come from that board's entry. An unknown board name is a hard error, reported before anything is compiled, and the message lists the boards that exist.
+
+The chosen board is recorded in the build's `.components` manifest, which is what lets the viewer draw the right board.
+
+`profiles/boards.json` is the single source of truth for all of this: `PinNames.h` and `viewer/js-hal/pinnames.js` are *generated* from it (see below). The board only changes the application's pins - `libmbed.a` is compiled once for the default board and is shared by every board, because no library translation unit binds a concrete pin value.
+
+## Changing the pin tables
+
+`mbed-simulator-hal/targets/TARGET_SIMULATOR/PinNames.h` and `viewer/js-hal/pinnames.js` are generated files - do not edit them by hand. Edit `profiles/boards.json` (one entry per board: pins with their values and physical pads, power pads, onboard peripherals) and regenerate:
+
+```
+$ node build-tools/generate-pinnames.js
+```
+
+Before committing - and in CI - check that the checked-in files still match the generator:
+
+```
+$ node build-tools/generate-pinnames.js --check
+```
+
+It exits non-zero and names the first differing line (or says the file has CRLF line endings, which is the other way a generated file drifts on a Windows checkout).
+
+The generator refuses to write anything when the description is inconsistent (a duplicate pin name or id, an alias of a name no pin defines, an alias cycle, a pin that two pads claim, two boards that select the same `TARGET_BOARD_*`, or an `NC` that is not the same value on every board) and says which board and pin is at fault.
+
 ## Changing mbed-simulator-hal
 
 After changing anything in the simulator HAL, you need to recompile the libmbed library:
