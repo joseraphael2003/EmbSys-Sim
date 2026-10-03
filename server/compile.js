@@ -5,6 +5,22 @@ const promisify = require('es6-promisify').promisify;
 const pinnames = require('../build-tools/generate-pinnames');
 
 module.exports = async function(content, outFolder, boardId) {
+    let board = null;
+    let allBoards = pinnames.loadBoards();
+    if (boardId && String(boardId).trim() !== '' && String(boardId).trim() !== 'default') {
+        let bId = String(boardId).trim();
+        try {
+            board = pinnames.boardById(allBoards, bId);
+        }
+        catch (e) {
+            let validIds = allBoards.boards.map(b => b.board.id).join(', ');
+            throw new Error(`Unknown board '${bId}'. Valid boards: ${validIds}`);
+        }
+    }
+    else {
+        board = pinnames.boardById(allBoards, 'default');
+    }
+
     let name = 'user_' + Date.now();
     let inputFile = Path.join(outFolder, name + '.cpp');
     let outputFile = Path.join(outFolder, name + '.js');
@@ -12,15 +28,6 @@ module.exports = async function(content, outFolder, boardId) {
     await promisify(fs.writeFile)(inputFile, content, 'utf-8');
 
     try {
-        let board = null;
-        if (boardId) {
-            try {
-                board = pinnames.boardById(pinnames.loadBoards(), String(boardId).trim());
-            }
-            catch (e) {
-                console.warn(`[compile] Warning: unknown board '${boardId}', falling back to default.`);
-            }
-        }
         await application.buildFile(inputFile, outputFile, [
             '-O2'
         ], false, board);

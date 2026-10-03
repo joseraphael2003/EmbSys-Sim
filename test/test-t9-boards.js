@@ -168,10 +168,20 @@ async function main() {
     assert(nucleoElements.hasButton1, 'Nucleo board has #button1 (User Button B1 / PC_13)');
     assert(nucleoElements.noticeVisible, 'Nucleo board shows virtual board notice banner');
     assert(nucleoElements.noticeText.indexOf('Nucleo') !== -1, `Notice mentions Nucleo: "${nucleoElements.noticeText}"`);
+    // Ensure LED1 is ON for the screenshot so lit state is visibly verified
+    await page.evaluate(() => {
+        const pin = window.MbedJSHal.PinNames.LED1;
+        window.MbedJSHal.gpio.write(pin, 1);
+    });
+    await page.waitForFunction(() => {
+        const doc = document.querySelector('#board-svg').contentDocument;
+        const led = doc.querySelector('#led1');
+        return led && led.getAttribute('fill') === '#2ecc71';
+    });
 
     const nucleoScreenshot = Path.join(EVIDENCE_DIR, 'plan2-task-9-nucleo.png');
     await page.screenshot({ path: nucleoScreenshot });
-    console.log('  Saved nucleo screenshot to:', nucleoScreenshot);
+    console.log('  Saved nucleo screenshot (with LED ON) to:', nucleoScreenshot);
     // ------------------------------------------------------------------------
     // Test 5: Real parent page with ?board=pico editor compile check
     // ------------------------------------------------------------------------
@@ -234,6 +244,44 @@ async function main() {
     const distinctSamples = new Set(samples).size;
     console.log('  GP25 observed samples:', samples, 'distinct count:', distinctSamples);
     assert(distinctSamples >= 2, `GP25 toggles in runtime compiled application (observed: ${JSON.stringify(samples)})`);
+    // Assert the produced out/user_*.js.components has "board": "pico"
+    const userMatch = iframeSrc.match(/user_\d+/);
+    assert(!!userMatch, `Matched user script in iframe src: ${iframeSrc}`);
+    if (userMatch) {
+        const compPath = Path.join(OUT_DIR, userMatch[0] + '.js.components');
+        assert(fs.existsSync(compPath), `Components manifest exists: ${compPath}`);
+        if (fs.existsSync(compPath)) {
+            const manifest = JSON.parse(fs.readFileSync(compPath, 'utf-8'));
+            assert(manifest.board === 'pico', `Manifest records board: "pico", got: "${manifest.board}"`);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Test 6: /compile endpoint rejects unknown board ID without producing output
+    // ------------------------------------------------------------------------
+    console.log('\n--- Test 6: /compile rejects unknown board ID ---');
+    const userFilesBefore = fs.readdirSync(OUT_DIR).filter(f => f.startsWith('user_'));
+
+    const rejectResponse = await page.evaluate(async (port) => {
+        const res = await fetch(`http://localhost:${port}/compile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: '#include "mbed.h"\nint main(){}', board: 'nonexistent' })
+        });
+        const text = await res.text();
+        return { status: res.status, text: text };
+    }, PORT);
+
+    assert(rejectResponse.status === 400, `Rejected status is 400, got: ${rejectResponse.status}`);
+    assert(rejectResponse.text.indexOf("Unknown board 'nonexistent'") !== -1,
+        `Error message names unknown board: "${rejectResponse.text}"`);
+    assert(rejectResponse.text.indexOf("pico") !== -1 && rejectResponse.text.indexOf("nucleo") !== -1,
+        `Error message lists valid boards: "${rejectResponse.text}"`);
+
+    const userFilesAfter = fs.readdirSync(OUT_DIR).filter(f => f.startsWith('user_'));
+    const newFiles = userFilesAfter.filter(f => !userFilesBefore.includes(f));
+    assert(newFiles.length === 0, `No user_* files produced on rejected compile: ${JSON.stringify(newFiles)}`);
+
 
 
     await browser.close();

@@ -604,7 +604,7 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             console.timeEnd('compile' + id);
 
             consoleLog('Compilation failed', id, err);
-            res.status(500).send(err);
+            res.status(400).send(err && err.message || String(err));
         });
     });
 

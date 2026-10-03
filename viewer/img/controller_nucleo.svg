@@ -4443,8 +4443,8 @@
 	</g>
 
 		<g id="user_led_ld2">
-			<rect id="led1" x="123.32" y="44.0" width="3.2" height="4.5" rx="0.5" fill="black" stroke="#555" stroke-width="0.5"/>
-			<text transform="matrix(1 0 0 1 123.1 53.0)" fill="#0049A7" font-family="'OCRA'" font-size="2.8">LD2</text>
+			<rect id="led1" x="123.32" y="60.0" width="3.2" height="4.5" rx="0.5" fill="black" stroke="#555" stroke-width="0.5"/>
+			<text transform="matrix(1 0 0 1 122.5 69.5)" fill="#0049A7" font-family="'OCRA'" font-size="3.0">LD2</text>
 		</g>
 </g>
 </svg>
