@@ -191,6 +191,9 @@ what is recorded. Total cold build time should be measured as a Plan 2 baseline.
   (`build-demos.js`): excludes only `https` and `tlssocket`
   (`TLSSocket.h` absent from pinned mbed-os 5.10.2) — a **principled exclusion**, not a
   silent failure. Any other failure prints `FAILED:<name>` + stderr and exits 1.
+  *Superseded in 0.2.0:* the exclusion list is gone — `https` and `tlssocket`
+  build and pass their scenarios under Mbed CE, and the suite is 21 of 21
+  (see `CHANGELOG.md`).
 - Deferred-to-Plan-1-demo compile items noted by T4 (separate from the em_asm header
   fix, still open at findings time): `platform/mbed_retarget.h` ssize_t/off_t/dev_t
   typedef conflicts with emscripten libc and a missing `mbed_assert.h` in some include

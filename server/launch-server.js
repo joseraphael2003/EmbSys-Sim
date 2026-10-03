@@ -166,17 +166,55 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
     // NSAPI_ERROR_WOULD_BLOCK (-3001) never originates here: it is the client's
     // verdict for "no bytes buffered yet, connection still open".
 
+    // Bytes can reach a relay socket before the browser's socket.io
+    // `socket-subscribe` frame does: `socket_open` emits the subscribe on the
+    // socket.io connection while `socket_connect` dials over a separate
+    // blocking XHR, and the server dials as soon as that POST lands. Emitting
+    // only to `s.subscribers` therefore dropped the peer's first flight (the
+    // TLS ServerHello included) whenever the subscribe frame lost that race -
+    // stream corruption, not just a slow path. Hold the bytes until the first
+    // subscriber attaches, then flush them in order (see the subscribe
+    // handler). The cap is a memory guard for a peer that streams into a tab
+    // that never subscribes; the real window is milliseconds.
+    const MAX_PENDING_BYTES = 1024 * 1024;
+
+    function deliverData(id, data) {
+        let s = sockets[id];
+        if (!s) return;
+
+        if (s.subscribers.length > 0) {
+            s.subscribers.forEach(ws => ws.emit('socket-data-' + id, data));
+            return;
+        }
+
+        s.preSubscribeChunks.push(data);
+        s.preSubscribeBytes += data.length;
+
+        while (s.preSubscribeBytes > MAX_PENDING_BYTES && s.preSubscribeChunks.length > 1) {
+            s.preSubscribeBytes -= s.preSubscribeChunks.shift().length;
+        }
+
+        if (s.preSubscribeBytes > MAX_PENDING_BYTES) {
+            consoleLog('Relay socket', id, 'buffered more than', MAX_PENDING_BYTES,
+                'bytes before a subscriber attached; dropping the oldest');
+            s.preSubscribeBytes = 0;
+            s.preSubscribeChunks = [];
+        }
+    }
+
     /**
      * Deliver the single terminal event of a relay socket. Later events are
      * swallowed on purpose: an 'end' is always followed by 'close' and an error
      * by a 'close', so without this the application would observe an error after
-     * a clean EOF.
+     * a clean EOF. A terminal event that happens before any subscriber attached
+     * is remembered (`terminalKind`) and replayed on subscribe.
      */
     function notifyTerminal(id, kind) {
         let s = sockets[id];
         if (!s || s.terminalSent) return;
 
         s.terminalSent = true;
+        s.terminalKind = kind;
 
         let subscribers = s.subscribers;
         s.subscribers = [];
@@ -224,6 +262,8 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
         s.subscribers = [];
         s.owner = null;
         s.terminalSent = false;
+        s.preSubscribeChunks = [];
+        s.preSubscribeBytes = 0;
         res.send(socketIx + '');
 
         let cIx = socketIx;
@@ -233,9 +273,7 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
 
             // Raw Buffer over the wire: string conversions would corrupt or
             // truncate binary payloads (e.g. embedded 0x00 bytes).
-            s.subscribers.forEach(ws => {
-                ws.emit('socket-data-' + cIx, data);
-            });
+            deliverData(cIx, data);
         });
         s.on('end', () => {
             consoleLog('TCP socket', cIx, 'shut down by peer (EOF)');
@@ -262,6 +300,8 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
         s.subscribers = [];
         s.owner = null;
         s.terminalSent = false;
+        s.preSubscribeChunks = [];
+        s.preSubscribeBytes = 0;
         res.send(socketIx + '');
 
         let cIx = socketIx;
@@ -269,9 +309,7 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
         s.on('message', (data, rinfo) => {
             consoleLog('Received UDP packet on socket', cIx, data.length, 'bytes', rinfo);
 
-            s.subscribers.forEach(ws => {
-                ws.emit('socket-data-' + cIx, data);
-            });
+            deliverData(cIx, data);
         });
         s.on('error', e => {
             consoleLog('UDP error on socket', cIx, e.message);
@@ -369,6 +407,20 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
 
             if (s.subscribers.indexOf(ws) === -1) {
                 s.subscribers.push(ws);
+            }
+
+            // Hand over anything the peer sent before this frame arrived (see
+            // deliverData), in order, and then replay a terminal event that was
+            // decided while there was nobody to receive it.
+            if (s.preSubscribeChunks && s.preSubscribeChunks.length > 0) {
+                for (let chunk of s.preSubscribeChunks) {
+                    ws.emit('socket-data-' + id, chunk);
+                }
+                s.preSubscribeChunks = [];
+                s.preSubscribeBytes = 0;
+            }
+            if (s.terminalSent && s.terminalKind) {
+                ws.emit('socket-' + s.terminalKind + '-' + id);
             }
 
             // The subscribing tab owns the relay socket - a relay id never

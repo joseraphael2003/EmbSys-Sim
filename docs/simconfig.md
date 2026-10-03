@@ -39,7 +39,7 @@ To use C++11 (or a different version), pass in `-c "-std=c++11"`.
 
 **ASYNCIFY**
 
-The simulator always builds with blanket ASYNCIFY (`-sASYNCIFY=1`). This is load-bearing: Mbed OS's sleep/wait APIs (e.g. `Thread::sleep_for`, `wait`) block on a condition variable. ASYNCIFY instruments those synchronous calls so control is yielded back to the browser event loop between blocking operations; without it a waiting program would deadlock the page. The legacy `--emterpretify` mode and its unsupported fastcomp flags have been removed.
+The simulator always builds with blanket ASYNCIFY (`-sASYNCIFY=1`). This is load-bearing: there is no RTOS in the simulator, and every delay (`ThisThread::sleep_for`, `wait_us`, `wait_ns`) is a cooperative yield - `emscripten_sleep()` unwinds the wasm stack and the runtime resumes it once the browser event loop has run again. ASYNCIFY is what makes that unwind possible; without it a waiting program would deadlock the page. The legacy `--emterpretify` mode and its unsupported fastcomp flags have been removed.
 
 **Entropy**
 

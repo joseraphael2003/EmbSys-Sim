@@ -1,18 +1,26 @@
 *.bc
+
+# Build products. These are host-built (or image-built) objects and artifacts;
+# copying them in would silently reuse a stale cache inside the image instead
+# of rebuilding it. out/ is recreated by `npm run build-demos`.
+mbed-simulator-hal/.obj/
+mbed-simulator-hal/libmbed.a
+mbed-simulator-hal/*.cache
 demos/*/out
+out/
+
+# Fetched dependency checkouts. build-tools/fetch-deps.js materializes these
+# from the pinned *.lib files inside the image; a host copy must never leak in
+# (it may be patched differently, and it is ~900 MB of context).
+mbed-simulator-hal/mbed-os/
+mbed-simulator-hal/mbed-http/
+mbed-simulator-hal/simple-mbed-cloud-client/
+mbed-simulator-hal/MQTT/
 demos/lorawan-classc/
 demos/mbed-cloud-client/
-mbed-simulator-hal/*.cache
-mbed-simulator-hal/mbed-http/
-mbed-simulator-hal/mbed-os/
-mbed-simulator-hal/MQTT/
-mbed-simulator-hal/simple-mbed-cloud-client/
-out/*.*
+
 node_modules
 npm-debug.log
 .git
 .gitignore
-*.md
-docs
-LICENSE
 Dockerfile

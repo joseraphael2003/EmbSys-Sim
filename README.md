@@ -1,6 +1,12 @@
-# Experimental simulator for Mbed OS 5 applications
+# Experimental simulator for Mbed OS 6 (Mbed CE) applications
 
 **Demo: https://labs.mbed.com/simulator**
+
+> **Mbed OS 5 coursework:** this simulator now targets Mbed CE (the Mbed OS 6
+> continuation). Code written for Mbed OS 5 needs a small migration - see
+> [docs/OS5_TO_OS6_MIGRATION_GUIDE.md](docs/OS5_TO_OS6_MIGRATION_GUIDE.md).
+> Untouched Mbed OS 5 coursework still runs in the frozen
+> [`SIMULATOR_Legacy-Fixed/`](../SIMULATOR_Legacy-Fixed) tree.
 
 ![Screenshot](https://os.mbed.com/media/uploads/janjongboom/simulator2.png)
 
@@ -15,6 +21,7 @@ To make this feedback loop much shorter, we're releasing an alpha version of the
 ## Docs
 
 * Installation, see below.
+* [Migrating Mbed OS 5 code to Mbed OS 6](docs/OS5_TO_OS6_MIGRATION_GUIDE.md)
 * [Configuration and compiler options](docs/simconfig.md)
 * [Peripherals](docs/peripherals.md)
 * [File systems and block devices](docs/fs.md)
@@ -250,6 +257,63 @@ In the `out` folder a number of pre-built demos are listed. To upgrade them:
 ```
 $ npm run build-demos
 ```
+
+## Headless tests and scenarios
+
+`cli.js --launch-headless --scenario <file>` runs an already-built application in
+headless Chromium and asserts on its serial output and on the virtual board's
+pins. The verification harnesses in `test/` drive the same runner against local
+servers, so they need no internet access:
+
+```
+$ node test/run-t4-tls.js         # authenticated TLS + Web Crypto entropy (12 checks)
+$ node test/run-t6-tls-demos.js   # https/tlssocket security path (11 checks)
+$ node test/run-t1-slice.js       # raw TCP echo
+$ node test/run-t3-relay.js       # relay: binary integrity, orderly EOF, RST
+```
+
+Prerequisites for any headless run (the Docker image already has them):
+
+1. A Chromium for puppeteer to launch: `npx puppeteer browsers install chrome`.
+1. Chromium's shared libraries. On Debian/Ubuntu:
+
+    ```
+    $ apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+        libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+        libasound2 libpango-1.0-0 libcairo2
+    ```
+
+The scenarios in
+`scenarios/{http,https,tcpsocket,tcpsocket-async,tlssocket,coap,ntp}.json` talk to
+public hosts (httpbin.org, postman-echo.com, ...). They are deliberately not part
+of the default CI job - a third party's downtime or certificate rotation must not
+make this repository red. The TLS path they cover is asserted hermetically by the
+two harnesses above.
+
+## Build performance
+
+`build-tools/build-libmbed.js` compiles ~408 translation units. `CONCURRENCY`
+controls how many `clang` processes run at once (default `min(3, cpus)`); each
+one sits at ~50 MB RSS, so on a small VM the CPU count is the limit, not memory:
+
+```
+$ CONCURRENCY=1 node build-demos.js    # single worker, for a 2-4 GB VM
+```
+
+The object cache in `mbed-simulator-hal/.obj/` is keyed on a hash of the compiler
+flags, the include order and the two configuration headers, plus each object's
+`-MMD` header set, so a normal rebuild is a fast freshness pass. Editing a flag
+or `mbed-target-config.h` deliberately clears the whole cache - budget for a full
+rebuild when you do.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` builds the Docker image (which fetches the pinned
+dependencies, builds `libmbed.a` and all 21 demos), then re-runs every gate in
+its own container: the dependency-closure guards, `generate-pinnames.js --check`,
+the 21-demo suite, the unresolved-import artifact scan, the `blinky` scenario and
+the two TLS harnesses. A separate job, run on a schedule, exercises the
+public-internet demo scenarios.
 
 ## Attribution
 

@@ -3,15 +3,83 @@ name: CI
 on:
   push:
     branches:
+      - modernization-plan2
       - modernization-plan1
       - master
   pull_request:
     branches:
       - master
+  # The public-internet demo scenarios only run here. They dial third-party
+  # hosts (httpbin.org, postman-echo.com, api.ipify.org, example.com, coap.me,
+  # time.nist.gov) whose uptime, certificates and even reason phrases are not
+  # ours to control - httpbin re-cased "I'm a teapot" to "I'M A TEAPOT" and
+  # failed the suite on someone else's copy edit. Keeping them off push/PR
+  # means a red push is always our defect; the TLS path they exercise is
+  # covered hermetically by test/run-t4-tls.js and test/run-t6-tls-demos.js.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 jobs:
-  ci:
-    name: Build & Smoke Test
+  build-and-smoke:
+    name: Build & Headless Smoke (hermetic)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # One image build does the whole cold path: npm install (which also
+      # downloads the Chromium the scenarios need), the pinned dependency
+      # fetch, libmbed.a and all 21 demos. BuildKit's GHA layer cache keeps the
+      # apt/npm/fetch layers warm across runs; the demo layer rebuilds whenever
+      # a source file changes, which is exactly when it should.
+      - name: Build container image (deps + libmbed + 21 demos)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: mbed-simulator:ci
+          cache-from: type=gha,scope=build
+          cache-to: type=gha,mode=max,scope=build
+
+      # Every step below is a separate `docker run` so a failure names the gate
+      # that failed. None of them is allowed to swallow its exit code.
+
+      - name: Dependency closure guard (fetch-deps re-verify)
+        run: docker run --rm mbed-simulator:ci node build-tools/fetch-deps.js
+
+      - name: Generated pin tables match profiles/boards.json
+        run: docker run --rm mbed-simulator:ci node build-tools/generate-pinnames.js --check
+
+      - name: Golden demo suite (21 of 21)
+        run: docker run --rm mbed-simulator:ci node build-demos.js
+
+      - name: Artifact scan (no unresolved link imports in any demo)
+        run: docker run --rm mbed-simulator:ci node build-tools/scan-unresolved-imports.js
+
+      - name: Headless smoke - blinky
+        run: docker run --rm mbed-simulator:ci node cli.js -i demos/blinky -o out --skip-build --launch-headless --scenario scenarios/blinky.json
+
+      - name: Headless TLS harness - authenticated TLS + Web Crypto entropy (T4)
+        run: docker run --rm mbed-simulator:ci node test/run-t4-tls.js
+
+      - name: Headless TLS harness - https/tlssocket security path (T6)
+        run: docker run --rm mbed-simulator:ci node test/run-t6-tls-demos.js
+
+      # The two non-default board profiles are a 0.2.0 deliverable; build each
+      # artifact under its own name so the board smoke scenarios cannot clobber
+      # each other's .components manifest (T9's multi-board hazard).
+      - name: Board profile smoke - pico and nucleo
+        run: |
+          docker run --rm mbed-simulator:ci bash -c "node cli.js -i demos/blinky -o out/blinky-pico.js --board pico && node cli.js -i demos/blinky -o out/blinky-pico.js --board pico --skip-build --launch-headless --scenario scenarios/pico-smoke.json && node cli.js -i demos/blinky -o out/blinky-nucleo.js --board nucleo && node cli.js -i demos/blinky -o out/blinky-nucleo.js --board nucleo --skip-build --launch-headless --scenario scenarios/nucleo-smoke.json"
+
+  network-smoke:
+    name: Public-internet demo scenarios (scheduled, non-blocking)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,16 +89,21 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build container image
-        run: docker build -t mbed-simulator .
-
-      - name: Run golden demo suite
-        run: docker run --rm -v ${{ github.workspace }}/out:/app/out mbed-simulator npm run build-demos
-
-      - name: Run headless smoke scenario
-        run: docker run --rm -v ${{ github.workspace }}/out:/app/out mbed-simulator node cli.js -i demos/blinky -o out --skip-build --launch-headless --scenario scenarios/blinky.json
-
-      - name: Upload out/ artifact
-        uses: actions/upload-artifact@v4
+        uses: docker/build-push-action@v6
         with:
-          name: simulator-out
-          path: out/
+          context: .
+          load: true
+          push: false
+          tags: mbed-simulator:ci
+          cache-from: type=gha,scope=network
+          cache-to: type=gha,mode=max,scope=network
+
+      - name: Public-host demo scenarios
+        run: |
+          set -euo pipefail
+          for demo in http https tcpsocket tcpsocket-async tlssocket coap ntp; do
+            echo "::group::$demo"
+            docker run --rm mbed-simulator:ci \
+              node cli.js -i "demos/$demo" -o out --skip-build --launch-headless --scenario "scenarios/$demo.json"
+            echo "::endgroup::"
+          done

@@ -16,3 +16,11 @@ patches/*.patch -text
 # platform, which is what makes that check meaningful.
 mbed-simulator-hal/targets/TARGET_SIMULATOR/PinNames.h -text
 viewer/js-hal/pinnames.js -text
+
+# test/run-t4-tls.js byte-compares the CA embedded in
+# test/fixtures/test-tls/test_ca_cert.h against certs/ca.crt. With
+# core.autocrlf=true a Windows checkout rewrites that PEM to CRLF, the
+# comparison fails, and the harness reports a certificate mismatch that has
+# nothing to do with the certificate. `-text` keeps the PEM as committed.
+test/fixtures/test-tls/certs/*.crt -text
+test/fixtures/test-tls/certs/*.key -text

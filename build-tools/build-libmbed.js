@@ -806,7 +806,7 @@ const NOT_YET_PORTED = [
 // honestly closed), and a check that only fires while some list is non-empty
 // passes by being skipped as soon as that list empties - which is what
 // fetch-deps' component-closure list did, silently, for three tasks. So the
-// checks below run unconditionally:
+// checks below run unconditionally on every build:
 //
 //   1. every component has a name and no two share one;
 //   2. every declared `sources`/`files`/`includes` path exists. This is the
@@ -815,50 +815,59 @@ const NOT_YET_PORTED = [
 //      class of "root renamed or deleted, manifest still promises it";
 //   3. a root is wired or deferred, never both (T2's rule);
 //   4. a deferred root that is not in the tree is a lie about the graph.
-const componentNames = new Set();
-const declaredRoots = [];
-const missingPaths = [];
+//
+// It runs inside build() *after* fetchDeps(), not at module load: a fresh
+// checkout has no mbed-os/mbed-http/simple-mbed-cloud-client yet, so checking
+// at require time made `node cli.js` (and therefore `npm run build-demos` and
+// `docker build`) abort with "the component manifest declares N path(s) that
+// do not exist" before the fetcher ever ran. That cold-start regression (T7)
+// was invisible on every warm tree and is exactly what T10's CI hit.
+const validateManifest = function() {
+    const componentNames = new Set();
+    const declaredRoots = [];
+    const missingPaths = [];
 
-for (const component of COMPONENTS) {
-    if (!component.name) {
-        throw new Error('a component in COMPONENTS has no name');
-    }
-    if (componentNames.has(component.name)) {
-        throw new Error(`two components are named '${component.name}'`);
-    }
-    componentNames.add(component.name);
+    for (const component of COMPONENTS) {
+        if (!component.name) {
+            throw new Error('a component in COMPONENTS has no name');
+        }
+        if (componentNames.has(component.name)) {
+            throw new Error(`two components are named '${component.name}'`);
+        }
+        componentNames.add(component.name);
 
-    for (const dir of (component.sources || []).concat(component.files || [])) {
-        declaredRoots.push({ component: component.name, root: dir });
-    }
-    for (const rel of (component.sources || []).concat(component.files || [], component.includes || [])) {
-        if (!fs.existsSync(Path.join(halFolder, rel))) {
-            missingPaths.push(`${component.name}: ${rel || '.'}`);
+        for (const dir of (component.sources || []).concat(component.files || [])) {
+            declaredRoots.push({ component: component.name, root: dir });
+        }
+        for (const rel of (component.sources || []).concat(component.files || [], component.includes || [])) {
+            if (!fs.existsSync(Path.join(halFolder, rel))) {
+                missingPaths.push(`${component.name}: ${rel || '.'}`);
+            }
         }
     }
-}
 
-if (missingPaths.length) {
-    throw new Error(`the component manifest declares ${missingPaths.length} path(s) that do not exist:\n` +
-        missingPaths.map((m) => `  - ${m}`).join('\n'));
-}
-
-const deferredRoots = new Set();
-for (const deferred of NOT_YET_PORTED) {
-    if (deferredRoots.has(deferred.sourceRoot)) {
-        throw new Error(`'${deferred.sourceRoot}' is listed twice in NOT_YET_PORTED`);
-    }
-    deferredRoots.add(deferred.sourceRoot);
-
-    if (!fs.existsSync(Path.join(halFolder, deferred.sourceRoot))) {
-        throw new Error(`NOT_YET_PORTED lists '${deferred.sourceRoot}', which does not exist in the tree`);
+    if (missingPaths.length) {
+        throw new Error(`the component manifest declares ${missingPaths.length} path(s) that do not exist:\n` +
+            missingPaths.map((m) => `  - ${m}`).join('\n'));
     }
 
-    const clash = declaredRoots.find(d => d.root === deferred.sourceRoot || d.root.indexOf(deferred.sourceRoot + '/') === 0);
-    if (clash) {
-        throw new Error(`Component '${clash.component}' wires '${clash.root}' while '${deferred.sourceRoot}' is still listed as NOT_YET_PORTED`);
+    const deferredRoots = new Set();
+    for (const deferred of NOT_YET_PORTED) {
+        if (deferredRoots.has(deferred.sourceRoot)) {
+            throw new Error(`'${deferred.sourceRoot}' is listed twice in NOT_YET_PORTED`);
+        }
+        deferredRoots.add(deferred.sourceRoot);
+
+        if (!fs.existsSync(Path.join(halFolder, deferred.sourceRoot))) {
+            throw new Error(`NOT_YET_PORTED lists '${deferred.sourceRoot}', which does not exist in the tree`);
+        }
+
+        const clash = declaredRoots.find(d => d.root === deferred.sourceRoot || d.root.indexOf(deferred.sourceRoot + '/') === 0);
+        if (clash) {
+            throw new Error(`Component '${clash.component}' wires '${clash.root}' while '${deferred.sourceRoot}' is still listed as NOT_YET_PORTED`);
+        }
     }
-}
+};
 
 
 // Compiler flags applied to every component translation unit on top of
@@ -1073,6 +1082,10 @@ let libmbed = {
     build: async function(verbose) {
         await this.checkDependencies();
         await this.fetchDeps();
+
+        // Only meaningful once the dependency checkouts exist (see the note on
+        // validateManifest): a cold tree has no mbed-os until fetchDeps() ran.
+        validateManifest();
 
         let includeDirectories = getIncludeDirectories();
         let cFiles = await getSourceFiles();
