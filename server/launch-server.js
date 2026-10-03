@@ -8,6 +8,7 @@ const hbs = require('hbs');
 const Path = require('path');
 const fs = require('fs');
 const compile = require('./compile');
+const pinnames = require('../build-tools/generate-pinnames');
 const { exists } = require('../build-tools/helpers');
 const promisify = require('es6-promisify').promisify;
 const udp = require('dgram');
@@ -411,9 +412,10 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             let jsui = [];
             let peripherals = [];
 
+            let components = null;
             let componentsPath = Path.join(outFolder, req.params.script + '.js.components');
             if (await exists(componentsPath)) {
-                let components = JSON.parse(await promisify(fs.readFile)(componentsPath, 'utf-8'));
+                components = JSON.parse(await promisify(fs.readFile)(componentsPath, 'utf-8'));
 
                 jshal = jshal.concat(components.jshal);
                 jsui = jsui.concat(components.jsui);
@@ -436,12 +438,58 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             jshal = normalize(jshal);
             jsui = normalize(jsui);
 
+            // Board resolution order:
+            // 1. Manifest board (authoritative for compiled wasm)
+            // 2. URL ?board= parameter
+            // 3. Fallback to default
+            let allBoards = pinnames.loadBoards();
+            let manifestBoardId = components && components.board ? String(components.board).trim() : null;
+            let urlBoardId = req.query.board ? String(req.query.board).trim() : null;
+            let resolvedBoardId = 'default';
+            let boardFallback = false;
+            let requestedBoard = urlBoardId || manifestBoardId || 'default';
+
+            if (manifestBoardId) {
+                if (urlBoardId && urlBoardId !== manifestBoardId) {
+                    console.warn(`[server] Warning: requested ?board=${urlBoardId} conflicts with compiled manifest board=${manifestBoardId}. Using manifest board.`);
+                }
+                try {
+                    pinnames.boardById(allBoards, manifestBoardId);
+                    resolvedBoardId = manifestBoardId;
+                }
+                catch (e) {
+                    console.warn(`[server] Warning: manifest board '${manifestBoardId}' unknown, falling back to default.`);
+                    boardFallback = true;
+                    resolvedBoardId = 'default';
+                }
+            }
+            else if (urlBoardId) {
+                try {
+                    pinnames.boardById(allBoards, urlBoardId);
+                    resolvedBoardId = urlBoardId;
+                }
+                catch (e) {
+                    console.warn(`[server] Warning: unknown board '${urlBoardId}', falling back to default.`);
+                    boardFallback = true;
+                    resolvedBoardId = 'default';
+                }
+            }
+
+            let boardObj = pinnames.boardById(allBoards, resolvedBoardId);
+            let svgAsset = (boardObj && boardObj.board.svgAsset) ? boardObj.board.svgAsset.replace(/^viewer\//, '') : 'img/controller_mbed.svg';
+
             res.render('viewer.html', {
                 script: req.params.script,
                 jshal: jshal,
                 jsui: jsui,
                 peripherals: JSON.stringify(peripherals),
-                version: version
+                version: version,
+                board: resolvedBoardId,
+                boardName: boardObj ? boardObj.board.displayName : 'Default',
+                boardMcu: boardObj ? boardObj.board.mcu : '',
+                svgAsset: svgAsset,
+                boardFallback: boardFallback,
+                requestedBoard: requestedBoard
             });
         })().catch(err => {
             return next(err);
@@ -547,7 +595,7 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
         let id = compilationId++;
 
         console.time('compile' + id);
-        compile(req.body.code, outFolder).then(name => {
+        compile(req.body.code, outFolder, req.body.board).then(name => {
             console.timeEnd('compile' + id);
 
             consoleLog('Compilation succeeded', id);

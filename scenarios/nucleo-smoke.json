@@ -1,0 +1,24 @@
+{
+    "name": "nucleo-smoke",
+    "timeoutMs": 10000,
+    "steps": [
+        {
+            "name": "blinky prints to serial on nucleo",
+            "timeoutMs": 10000,
+            "assert": {
+                "type": "serial",
+                "regex": "Blink! LED is now [01]"
+            }
+        },
+        {
+            "name": "user LED (PA_5) toggles on nucleo",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "PA_5",
+                "samples": 8,
+                "intervalMs": 250,
+                "distinctAtLeast": 2
+            }
+        }
+    ]
+}

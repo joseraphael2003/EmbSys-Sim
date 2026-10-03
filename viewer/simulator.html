@@ -46,7 +46,7 @@ int main() {
         led = !led;
         printf("Blink! LED is now %d\n", led.read());
 
-        wait_ms(500);
+        ThisThread::sleep_for(500ms);
     }
 }
 </div>
@@ -85,6 +85,21 @@ int main() {
           noticeEl.style.display = msg ? 'block' : 'none';
           noticeEl.style.color = isError ? '#a00' : '#7a5c00';
       }
+      var knownBoards = (window.MbedJSHal && window.MbedJSHal.PinNames && window.MbedJSHal.PinNames.boards) || { default: true, pico: true, nucleo: true };
+      var urlParams = new URLSearchParams(window.location.search);
+      var urlBoard = urlParams.get('board');
+      var currentBoard = 'default';
+      if (urlBoard) {
+          if (knownBoards[urlBoard]) {
+              currentBoard = urlBoard;
+          } else {
+              setNotice('Unknown board "' + urlBoard + '", falling back to default board.', true);
+              console.warn('[simulator] Unknown board "' + urlBoard + '", falling back to default board.');
+              currentBoard = 'default';
+          }
+      }
+      window.currentBoard = currentBoard;
+
 
       // RFC 4648 §5 base64url, UTF-8 safe (native btoa/atob only, no external libs)
       function bytesToBase64Url(bytes) {
@@ -124,7 +139,7 @@ int main() {
       }
 
       function buildLabHash(code) {
-          var payload = JSON.stringify({ code: code, model: readModel() });
+          var payload = JSON.stringify({ code: code, model: readModel(), board: window.currentBoard || 'default' });
           return LAB_PREFIX + bytesToBase64Url(utf8Encode(payload));
       }
 
@@ -137,7 +152,8 @@ int main() {
               var json = JSON.parse(utf8Decode(base64UrlToBytes(encoded)));
               var code = (typeof json.code === 'string') ? json.code : '';
               var model = Array.isArray(json.model) ? json.model : null; // null/absent => demo defaults
-              return { code: code, model: model };
+              var board = (typeof json.board === 'string') ? json.board : 'default';
+              return { code: code, model: model, board: board };
           } catch (ex) {
               console.warn('[simulator] Could not decode #lab= payload:', ex);
               return { error: 'This shared configuration is corrupted or invalid.' };
@@ -161,14 +177,41 @@ int main() {
               console.warn('[simulator] #lab= fallback to default demo.');
               return;
           }
+          if (parsed.board) {
+              if (knownBoards[parsed.board]) {
+                  window.currentBoard = parsed.board;
+              } else {
+                  setNotice('Unknown board "' + parsed.board + '", falling back to default board.', true);
+                  window.currentBoard = 'default';
+              }
+          } else {
+              window.currentBoard = 'default';
+          }
+          var iframeEl = document.querySelector('#viewer iframe');
+          if (iframeEl) {
+              var b = window.currentBoard;
+              iframeEl.src = '/view/blinky' + (b && b !== 'default' ? '?board=' + encodeURIComponent(b) : '');
+          }
           editor.setValue(parsed.code);
           editor.selection.clearSelection();
           editor.selection.moveCursorTo(0, 0);
           persistModel(parsed.model);
-          setNotice('', false);
+          if (!parsed.error && (!parsed.board || knownBoards[parsed.board])) {
+              setNotice('', false);
+          }
       }
 
       loadLab(document.location.hash);
+      var iframeEl = document.querySelector('#viewer iframe');
+      window.addEventListener('hashchange', function() {
+          loadLab(document.location.hash);
+      });
+
+      if (iframeEl) {
+          var b = window.currentBoard;
+          iframeEl.src = '/view/blinky' + (b && b !== 'default' ? '?board=' + encodeURIComponent(b) : '');
+      }
+
 
       // Expose codec for testing / console round-trips.
       window.labShare = {

@@ -77,6 +77,38 @@ body {
   height: 22.5vw;
   font-family: 'Lucida Console', Monaco, monospace;
 }
+#board-svg.board-pico {
+  width: 16vw;
+  height: 40.5vw;
+}
+
+#board-svg.board-nucleo {
+  width: 32vw;
+  height: 26.8vw;
+}
+
+.virtual-board-banner {
+  display: none;
+  background: #1e1e2e;
+  color: #a6adc8;
+  border: 1px solid #45475a;
+  border-left: 4px solid #89b4fa;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 5px 10px;
+  margin: 6px 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.virtual-board-banner strong {
+  color: #cdd6f4;
+}
+
+.virtual-board-banner.warning {
+  border-left-color: #f38ba8;
+  color: #f38ba8;
+}
 
 #c12832 {
   border: solid 1px;

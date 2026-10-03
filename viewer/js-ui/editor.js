@@ -4,6 +4,10 @@ editor.getSession().setMode("ace/mode/c_cpp");
 
 var simulatorFrame = document.querySelector('#viewer iframe');
 var compilationFailed = document.querySelector('#compilation-failed');
+function getViewUrl(name) {
+    var b = window.currentBoard;
+    return '/view/' + name + (b && b !== 'default' ? '?board=' + encodeURIComponent(b) : '');
+}
 
 if (document.location.hash) {
     if (document.location.hash.indexOf('#user') === 0) {
@@ -16,7 +20,7 @@ if (document.location.hash) {
                 editor.selection.clearSelection();
                 editor.selection.moveCursorTo(0, 0);
 
-                simulatorFrame.src = '/view/' + script;
+                simulatorFrame.src = getViewUrl(script);
                 simulatorFrame.style.display = 'block';
                 compilationFailed.style.display = 'none';
             }
@@ -43,7 +47,7 @@ function load_demo(demo) {
         if (x.status === 200) {
             sessionStorage.removeItem('model-dirty');
 
-            simulatorFrame.src = '/view/' + demo;
+            simulatorFrame.src = getViewUrl(demo);
             simulatorFrame.style.display = 'block';
             compilationFailed.style.display = 'none';
 
@@ -88,7 +92,7 @@ document.querySelector('#run').onclick = function() {
         btn.removeAttribute('disabled');
 
         if (x.status === 200) {
-            simulatorFrame.src = '/view/' + x.responseText;
+            simulatorFrame.src = getViewUrl(x.responseText);
             status.textContent = '';
             document.location.hash = '#' + x.responseText;
 
@@ -117,5 +121,5 @@ document.querySelector('#run').onclick = function() {
     };
     x.open('POST', '/compile');
     x.setRequestHeader('Content-Type', 'application/json');
-    x.send(JSON.stringify({ code: editor.getValue() }));
+    x.send(JSON.stringify({ code: editor.getValue(), board: window.currentBoard || null }));
 }

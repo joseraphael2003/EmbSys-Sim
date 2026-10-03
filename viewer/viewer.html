@@ -23,8 +23,9 @@
 
 
   <section id="board">
+      <div id="virtual-board-notice" class="virtual-board-banner"></div>
       <section id="components">
-          <object id="board-svg" data="/img/controller_mbed.svg" type="image/svg+xml"></object>
+          <object id="board-svg" data="/{{{svgAsset}}}" type="image/svg+xml" class="board-{{board}}"></object>
       </section>
   </section>
 
@@ -53,6 +54,11 @@
 
   <script>
     window.peripheralsToLoad = {{{peripherals}}};
+    window.activeBoard = "{{board}}";
+    window.boardName = "{{boardName}}";
+    window.boardMcu = "{{boardMcu}}";
+    window.boardFallback = {{#if boardFallback}}true{{else}}false{{/if}};
+    window.requestedBoard = "{{requestedBoard}}";
   </script>
 
   <script src="/socket.io/socket.io.js"></script>

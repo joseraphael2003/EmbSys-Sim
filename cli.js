@@ -261,7 +261,11 @@ function serialPass(spec, buffer) {
 async function readSample(page, spec) {
     if (spec.gpio !== undefined) {
         return await page.evaluate((s) => {
-            const pin = window.MbedJSHal.PinNames[s.gpio];
+            const activeBoard = window.activeBoard || 'default';
+            let pin = window.MbedJSHal.PinNames[s.gpio];
+            if (pin === undefined && window.MbedJSHal.PinNames.boards && window.MbedJSHal.PinNames.boards[activeBoard]) {
+                pin = window.MbedJSHal.PinNames.boards[activeBoard][s.gpio];
+            }
             return s.aspect === 'period_us' ? window.MbedJSHal.gpio.get_period_us(pin) : window.MbedJSHal.gpio.read(pin);
         }, spec);
     }
@@ -388,7 +392,14 @@ function readProblems(spec, value) {
 // found, so the step fails instead of silently doing nothing.
 async function performAction(page, spec) {
     if (spec.gpio !== undefined) {
-        await page.evaluate((s) => window.MbedJSHal.gpio.write(window.MbedJSHal.PinNames[s.gpio], s.set), spec);
+        await page.evaluate((s) => {
+            const activeBoard = window.activeBoard || 'default';
+            let pin = window.MbedJSHal.PinNames[s.gpio];
+            if (pin === undefined && window.MbedJSHal.PinNames.boards && window.MbedJSHal.PinNames.boards[activeBoard]) {
+                pin = window.MbedJSHal.PinNames.boards[activeBoard][s.gpio];
+            }
+            return window.MbedJSHal.gpio.write(pin, s.set);
+        }, spec);
         return true;
     }
     if (spec.component !== undefined && (spec.interaction !== undefined || spec.value !== undefined)) {
@@ -655,7 +666,8 @@ fn(program.inputDir || program.inputFile, program.outputFile, extraArgs, program
                     await page.exposeFunction('onFailedExecution', e => {
                         failures.value = String(e);
                     });
-                    await page.goto(`http://localhost:${port}/view/${name}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                    const viewUrl = `http://localhost:${port}/view/${name}` + (program.board ? `?board=${encodeURIComponent(program.board)}` : '');
+                    await page.goto(viewUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
                     if (scenario) {
                         await runScenario(page, browser, scenario, startTs, failures, serialLines);

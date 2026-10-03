@@ -1,0 +1,24 @@
+{
+    "name": "pico-smoke",
+    "timeoutMs": 10000,
+    "steps": [
+        {
+            "name": "blinky prints to serial on pico",
+            "timeoutMs": 10000,
+            "assert": {
+                "type": "serial",
+                "regex": "Blink! LED is now [01]"
+            }
+        },
+        {
+            "name": "onboard LED (GP25) toggles on pico",
+            "timeoutMs": 10000,
+            "read": {
+                "gpio": "GP25",
+                "samples": 8,
+                "intervalMs": 250,
+                "distinctAtLeast": 2
+            }
+        }
+    ]
+}

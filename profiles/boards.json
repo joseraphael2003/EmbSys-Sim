@@ -644,7 +644,7 @@
             "displayName": "Raspberry Pi Pico (RP2040)",
             "mcu": "Raspberry Pi RP2040 (dual Arm Cortex-M0+ @ 133 MHz)",
             "define": "TARGET_BOARD_PICO",
-            "svgAsset": null,
+            "svgAsset": "viewer/img/controller_pico.svg",
             "notes": [
                 "Mbed CE's own target for this board (mbed-os/targets/TARGET_RASPBERRYPI/TARGET_MCU_RP2/TARGET_MCU_RP2040/TARGET_RASPBERRY_PI_PICO/PinNames.h) names the GPIOs IO_0..IO_29 and defines LED1, I2C_SCL/SDA, SPI_SCLK/MOSI/MISO/CS and CONSOLE_TX/RX exactly as this board does; IO_n is kept as an alias so an application written against that target compiles here.",
                 "Pin ids are RP2040 GPIO numbers, except NC: nothing in the simulator's HAL decodes port << 5 | pin, it forwards the integer it was handed to MbedJSHal, so the id is free to be the GPIO number on this board.",
@@ -1729,7 +1729,7 @@
             "displayName": "ST Nucleo-F401RE",
             "mcu": "ST STM32F401RET6 (Arm Cortex-M4F @ 84 MHz)",
             "define": "TARGET_BOARD_NUCLEO",
-            "svgAsset": null,
+            "svgAsset": "viewer/img/controller_nucleo.svg",
             "notes": [
                 "Pin names and ids are Mbed CE's NUCLEO_F401RE target values (PA_0..PA_15 = 0x00..0x0F, PB_0..PB_15 = 0x10..0x1F, PC_0..PC_15 = 0x20..0x2F, PD_2 = 0x32, PH_0/PH_1 = 0x70/0x71, ADC_TEMP/VREF/VBAT = 0xF0..0xF2, NC = -1), so an application written against that target compiles unchanged.",
                 "PB_11 does not exist on the STM32F401RE; PB_12 is the next pad after PB_10.",
