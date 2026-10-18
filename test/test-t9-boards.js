@@ -10,6 +10,10 @@ const PORT = 7922;
 const EVIDENCE_DIR = fs.existsSync('/evidence') ? '/evidence' : Path.resolve(__dirname, '..', '..', '.sisyphus', 'evidence');
 const OUT_DIR = Path.resolve(__dirname, '..', 'out');
 
+// The screenshots are the harness's record of what the viewer drew. Create the
+// directory instead of assuming a mounted evidence folder exists.
+fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+
 async function main() {
     console.log('[T9 Test] Starting launch-server on port', PORT);
     await promisify(launchServer)(OUT_DIR, PORT, 0, false);
@@ -282,7 +286,236 @@ async function main() {
     const newFiles = userFilesAfter.filter(f => !userFilesBefore.includes(f));
     assert(newFiles.length === 0, `No user_* files produced on rejected compile: ${JSON.stringify(newFiles)}`);
 
+    // ------------------------------------------------------------------------
+    // Test 7: ?board= is text, never markup (reflected DOM XSS, F-wave F2-B1)
+    // ------------------------------------------------------------------------
+    console.log('\n--- Test 7: reflected ?board= payloads stay text ---');
 
+    const dialogs = [];
+    page.on('dialog', async (dialog) => {
+        dialogs.push(dialog.message());
+        await dialog.dismiss();
+    });
+
+    // The first payload is the one that used to get through: hbs escapes
+    // `&<>"'` for HTML but not backslash, so these six characters reached the
+    // page as `\u003c` and the JS parser of the inline config script decoded
+    // them into real markup before the notice assigned it to innerHTML.
+    const ESCAPED_PAYLOAD = '\\u003cimg src\\u003dx onerror\\u003dalert(1)\\u003e';
+    const PLAIN_PAYLOAD = '<img src=x onerror=alert(1)>';
+
+    async function assertBoardParamIsInert(payload, label) {
+        await page.goto(`http://localhost:${PORT}/view/blinky?board=${encodeURIComponent(payload)}`, { waitUntil: 'networkidle0' });
+        await page.waitForSelector('#board-svg');
+
+        const state = await page.evaluate(() => {
+            const notice = document.querySelector('#virtual-board-notice');
+            const svg = document.querySelector('#board-svg');
+            return {
+                noticeText: notice.textContent,
+                noticeHtml: notice.innerHTML,
+                noticeVisible: notice.style.display !== 'none',
+                injectedElements: notice.querySelectorAll('*').length - notice.querySelectorAll('strong,code').length,
+                imagesOnPage: document.querySelectorAll('img').length,
+                scriptsOnPage: document.querySelectorAll('script[src*="onerror"]').length,
+                activeBoard: window.activeBoard,
+                requestedBoard: window.requestedBoard,
+                configBoard: window.viewerConfig && window.viewerConfig.board,
+                svgAsset: svg.getAttribute('data')
+            };
+        });
+
+        assert(state.injectedElements === 0, `[${label}] nothing was injected into the notice (found ${state.injectedElements} unexpected element(s))`);
+        assert(state.imagesOnPage === 0 && state.scriptsOnPage === 0, `[${label}] no <img>/<script> exists on the page (imgs=${state.imagesOnPage})`);
+        assert(state.noticeHtml.indexOf('<img') === -1, `[${label}] the notice markup contains no tag from the payload: ${JSON.stringify(state.noticeHtml)}`);
+        assert(state.noticeText.indexOf(payload) !== -1, `[${label}] the notice shows the payload literally: ${JSON.stringify(state.noticeText)}`);
+        assert(state.requestedBoard === payload, `[${label}] window.requestedBoard is the raw string, not a decoded one: ${JSON.stringify(state.requestedBoard)}`);
+        assert(state.configBoard === 'default', `[${label}] the inline config parsed and carries an allowlisted board: ${JSON.stringify(state.configBoard)}`);
+        assert(state.activeBoard === 'default', `[${label}] the default board is drawn: ${JSON.stringify(state.activeBoard)}`);
+        assert(state.svgAsset.indexOf('controller_mbed.svg') !== -1, `[${label}] the default drawing is loaded: ${state.svgAsset}`);
+        assert(state.noticeVisible, `[${label}] the unknown-board notice is shown`);
+    }
+
+    await assertBoardParamIsInert(ESCAPED_PAYLOAD, 'backslash-u payload');
+    await assertBoardParamIsInert(PLAIN_PAYLOAD, 'plain markup payload');
+
+    // A trailing backslash used to terminate the JS string and kill the whole
+    // inline config script (the viewer then had no board at all).
+    console.log('  ... trailing backslash');
+    await page.goto(`http://localhost:${PORT}/view/blinky?board=${encodeURIComponent('x\\')}`, { waitUntil: 'networkidle0' });
+    const backslashState = await page.evaluate(() => ({
+        config: window.viewerConfig || null,
+        activeBoard: window.activeBoard,
+        noticeText: document.querySelector('#virtual-board-notice').textContent
+    }));
+    assert(!!backslashState.config, 'a trailing backslash no longer breaks the inline config script');
+    assert(backslashState.activeBoard === 'default', `the default board is drawn for the backslash payload: ${JSON.stringify(backslashState.activeBoard)}`);
+    assert(backslashState.noticeText.indexOf('x\\') !== -1, `the notice shows the backslash payload literally: ${JSON.stringify(backslashState.noticeText)}`);
+
+    assert(dialogs.length === 0, `no dialog fired for any payload (fired: ${JSON.stringify(dialogs)})`);
+
+    // ------------------------------------------------------------------------
+    // Test 8: inherited object keys are not board names on the parent page
+    // ------------------------------------------------------------------------
+    console.log('\n--- Test 8: "constructor" is not a board ---');
+
+    await page.goto(`http://localhost:${PORT}/?board=constructor`, { waitUntil: 'networkidle0' });
+    const parentCtor = await page.evaluate(() => ({
+        currentBoard: window.currentBoard,
+        noticeText: document.querySelector('#share-notice').textContent,
+        noticeVisible: window.getComputedStyle(document.querySelector('#share-notice')).display !== 'none',
+        iframeSrc: document.querySelector('#viewer iframe').getAttribute('src')
+    }));
+    assert(parentCtor.currentBoard === 'default', `?board=constructor falls back to the default board, got: ${JSON.stringify(parentCtor.currentBoard)}`);
+    assert(parentCtor.noticeVisible && parentCtor.noticeText.indexOf('constructor') !== -1,
+        `the parent page reports it as an unknown board: ${JSON.stringify(parentCtor.noticeText)}`);
+    assert(parentCtor.iframeSrc.indexOf('board=constructor') === -1,
+        `the unknown id is not forwarded to the viewer: ${parentCtor.iframeSrc}`);
+
+    // Same check for the board carried inside a #lab= share link.
+    const ctorLabHash = await page.evaluate(() => {
+        window.currentBoard = 'constructor';
+        return window.labShare.build('int main() {}');
+    });
+    await page.goto(`http://localhost:${PORT}/${ctorLabHash}`, { waitUntil: 'networkidle0' });
+    const labCtor = await page.evaluate(() => ({
+        currentBoard: window.currentBoard,
+        noticeText: document.querySelector('#share-notice').textContent
+    }));
+    assert(labCtor.currentBoard === 'default', `a #lab= payload with board "constructor" falls back to default, got: ${JSON.stringify(labCtor.currentBoard)}`);
+    assert(labCtor.noticeText.indexOf('constructor') !== -1, `the parent page reports the #lab= board as unknown: ${JSON.stringify(labCtor.noticeText)}`);
+
+    // ------------------------------------------------------------------------
+    // Test 9: every build records its board, and the drawing follows the binary
+    // ------------------------------------------------------------------------
+    console.log('\n--- Test 9: default builds record "default"; ?board= cannot override it ---');
+
+    const demoDirs = fs.readdirSync(Path.resolve(__dirname, '..', 'demos'), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
+
+    const manifestsMissing = [];
+    const manifestsWrong = [];
+    for (const name of demoDirs) {
+        const manifestPath = Path.join(OUT_DIR, name + '.js.components');
+        if (!fs.existsSync(manifestPath)) {
+            manifestsMissing.push(name);
+            continue;
+        }
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        if (manifest.board !== 'default') {
+            manifestsWrong.push(`${name}=${JSON.stringify(manifest.board)}`);
+        }
+    }
+    assert(manifestsMissing.length === 0, `every demo has a .components manifest (missing: ${JSON.stringify(manifestsMissing)})`);
+    assert(manifestsWrong.length === 0, `every default-built demo records "board": "default" (wrong: ${JSON.stringify(manifestsWrong)})`);
+
+    // A default-built artifact asked for another board draws ITS OWN board and
+    // says so, instead of drawing a board the wasm was never compiled for.
+    console.log('  ... /view/blinky?board=pico on a default-built artifact');
+    await page.goto(`http://localhost:${PORT}/view/blinky?board=pico`, { waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => {
+        const svg = document.querySelector('#board-svg');
+        return svg && svg.contentDocument && svg.contentDocument.rootElement;
+    });
+    const mismatchState = await page.evaluate(() => {
+        const notice = document.querySelector('#virtual-board-notice');
+        return {
+            activeBoard: window.activeBoard,
+            boardMismatch: window.boardMismatch,
+            requestedBoard: window.requestedBoard,
+            svgAsset: document.querySelector('#board-svg').getAttribute('data'),
+            noticeText: notice.textContent,
+            noticeVisible: notice.style.display !== 'none'
+        };
+    });
+    assert(mismatchState.activeBoard === 'default', `the compiled board is drawn, not the requested one: ${JSON.stringify(mismatchState.activeBoard)}`);
+    assert(mismatchState.boardMismatch === true, 'the mismatch flag reached the viewer');
+    assert(mismatchState.svgAsset.indexOf('controller_mbed.svg') !== -1, `the default drawing is loaded: ${mismatchState.svgAsset}`);
+    assert(mismatchState.noticeVisible, 'the mismatch warning is visible');
+    assert(mismatchState.noticeText.indexOf('default') !== -1 && mismatchState.noticeText.indexOf('pico') !== -1,
+        `the mismatch warning names both boards: ${JSON.stringify(mismatchState.noticeText)}`);
+
+    // ... and the compiled board's own LED is the one that lights up, which the
+    // requested board's pin map never drove (its LED1 is a different pin value).
+    const ledFills = new Set();
+    for (let i = 0; i < 12; i++) {
+        ledFills.add(await page.evaluate(() => {
+            const doc = document.querySelector('#board-svg').contentDocument;
+            const led = doc && doc.querySelector('#led1');
+            return led ? led.getAttribute('fill') : 'no-#led1';
+        }));
+        if (ledFills.has('#FBBE0E')) break;
+        await new Promise((r) => setTimeout(r, 250));
+    }
+    assert(ledFills.has('#FBBE0E'),
+        `the compiled board's LED lights up in its board colour (observed fills: ${JSON.stringify([...ledFills])})`);
+
+    // An unknown ?board= on an artifact compiled for a non-default board draws
+    // that board (never the default) and says so instead of claiming a fallback.
+    console.log('  ... /view/blinky-pico?board=nonexistent');
+    await page.goto(`http://localhost:${PORT}/view/blinky-pico?board=nonexistent`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#board-svg');
+    const picoUnknown = await page.evaluate(() => {
+        const notice = document.querySelector('#virtual-board-notice');
+        return {
+            activeBoard: window.activeBoard,
+            svgAsset: document.querySelector('#board-svg').getAttribute('data'),
+            noticeText: notice.textContent,
+            noticeVisible: notice.style.display !== 'none'
+        };
+    });
+    assert(picoUnknown.activeBoard === 'pico', `the compiled board is still drawn: ${JSON.stringify(picoUnknown.activeBoard)}`);
+    assert(picoUnknown.svgAsset.indexOf('controller_pico.svg') !== -1, `the pico drawing is loaded: ${picoUnknown.svgAsset}`);
+    assert(picoUnknown.noticeVisible && picoUnknown.noticeText.indexOf('nonexistent') !== -1,
+        `the unknown board is reported: ${JSON.stringify(picoUnknown.noticeText)}`);
+    assert(picoUnknown.noticeText.indexOf('fell back to default') === -1,
+        `the notice does not claim a default fallback that did not happen: ${JSON.stringify(picoUnknown.noticeText)}`);
+
+    // A legacy manifest (no board recorded) is the default board: it was
+    // compiled against PinNames.h's #else branch.
+    console.log('  ... legacy manifests without a board key');
+    const blinkyManifest = JSON.parse(fs.readFileSync(Path.join(OUT_DIR, 'blinky.js.components'), 'utf-8'));
+    const legacyPaths = [];
+    for (const [name, mutate] of [ [ 'legacy-null-board', (m) => { m.board = null; } ], [ 'legacy-no-board-key', (m) => { delete m.board; } ] ]) {
+        const manifest = JSON.parse(JSON.stringify(blinkyManifest));
+        mutate(manifest);
+        const manifestPath = Path.join(OUT_DIR, name + '.js.components');
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 4), 'utf-8');
+        legacyPaths.push(manifestPath);
+
+        await page.goto(`http://localhost:${PORT}/view/${name}`, { waitUntil: 'networkidle0' });
+        await page.waitForSelector('#board-svg');
+        const legacyState = await page.evaluate(() => {
+            const notice = document.querySelector('#virtual-board-notice');
+            return {
+                activeBoard: window.activeBoard,
+                svgAsset: document.querySelector('#board-svg').getAttribute('data'),
+                noticeVisible: notice.style.display !== 'none'
+            };
+        });
+        assert(legacyState.activeBoard === 'default', `[${name}] a legacy manifest renders the default board: ${JSON.stringify(legacyState.activeBoard)}`);
+        assert(legacyState.svgAsset.indexOf('controller_mbed.svg') !== -1, `[${name}] the default drawing is loaded: ${legacyState.svgAsset}`);
+        assert(!legacyState.noticeVisible, `[${name}] no notice is shown for a legacy default artifact`);
+
+        await page.goto(`http://localhost:${PORT}/view/${name}?board=pico`, { waitUntil: 'networkidle0' });
+        await page.waitForSelector('#board-svg');
+        const legacyMismatch = await page.evaluate(() => {
+            const notice = document.querySelector('#virtual-board-notice');
+            return {
+                activeBoard: window.activeBoard,
+                noticeText: notice.textContent,
+                noticeVisible: notice.style.display !== 'none'
+            };
+        });
+        assert(legacyMismatch.activeBoard === 'default', `[${name}] ?board=pico cannot override a legacy artifact: ${JSON.stringify(legacyMismatch.activeBoard)}`);
+        assert(legacyMismatch.noticeVisible && legacyMismatch.noticeText.indexOf('pico') !== -1,
+            `[${name}] the ignored ?board= is reported: ${JSON.stringify(legacyMismatch.noticeText)}`);
+    }
+    for (const manifestPath of legacyPaths) {
+        fs.unlinkSync(manifestPath);
+    }
 
     await browser.close();
 
