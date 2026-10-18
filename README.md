@@ -217,7 +217,7 @@ $ mbed-simulator . --board pico
 
 The names a program may use (`LED1`, `BUTTON1`, `p5`, `GP25`, `PA_5`, `D4`, ...) and their integer values come from that board's entry. An unknown board name is a hard error, reported before anything is compiled, and the message lists the boards that exist.
 
-The chosen board is recorded in the build's `.components` manifest, which is what lets the viewer draw the right board.
+The chosen board is recorded in the build's `.components` manifest - for every build, `default` included - and that is what lets the viewer draw the right board. The drawing follows the binary: the pin values are baked into the wasm at compile time, so a conflicting `?board=` in the URL is ignored and reported with a visible mismatch banner rather than drawing a board the program was never compiled for.
 
 `profiles/boards.json` is the single source of truth for all of this: `PinNames.h` and `viewer/js-hal/pinnames.js` are *generated* from it (see below). The board only changes the application's pins - `libmbed.a` is compiled once for the default board and is shared by every board, because no library translation unit binds a concrete pin value.
 
@@ -237,7 +237,7 @@ $ node build-tools/generate-pinnames.js --check
 
 It exits non-zero and names the first differing line (or says the file has CRLF line endings, which is the other way a generated file drifts on a Windows checkout).
 
-The generator refuses to write anything when the description is inconsistent (a duplicate pin name or id, an alias of a name no pin defines, an alias cycle, a pin that two pads claim, two boards that select the same `TARGET_BOARD_*`, or an `NC` that is not the same value on every board) and says which board and pin is at fault.
+The generator refuses to write anything when the description is inconsistent (a duplicate pin name or id, an alias of a name no pin defines, an alias cycle, a pin that two pads claim, two boards that select the same `TARGET_BOARD_*`, an `NC` that is not the same value on every board, an `svgId` that is not an element id, a `color` that is not `#rrggbb`, or an onboard LED that has an `svgId` and a pin but no `color` to light it up with) and says which board and pin is at fault.
 
 ## Changing mbed-simulator-hal
 

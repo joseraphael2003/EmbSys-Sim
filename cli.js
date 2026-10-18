@@ -87,16 +87,20 @@ if (!program.outputFile) {
 // what the generated PinNames.h and pinnames.js are built from, so a name that
 // is not in it cannot be compiled for: an unknown board is a hard error here
 // rather than a build that silently falls back to the default board's enum.
+//
+// The default is resolved to its descriptor, not left null. The .components
+// manifest has to name the board EVERY artifact was compiled for, "default"
+// included: the viewer draws the board of the binary, and a manifest with no
+// board (or null) used to make it honour ?board= and draw a board the program
+// was never compiled for.
 let board = null;
 
-if (program.board) {
-    try {
-        board = pinnames.boardById(pinnames.loadBoards(), program.board);
-    }
-    catch (e) {
-        console.log(`Error: ${e.message}`);
-        process.exit(1);
-    }
+try {
+    board = pinnames.boardById(pinnames.loadBoards(), program.board || 'default');
+}
+catch (e) {
+    console.log(`Error: ${e.message}`);
+    process.exit(1);
 }
 
 // Emscripten is only needed when actually compiling; --skip-build launches an

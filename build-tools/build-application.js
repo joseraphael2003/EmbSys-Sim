@@ -44,12 +44,12 @@ let build = async function(outFile, extraArgs, verbose, includeDirectories, cFil
         jsui: builtinPeripherals.ui.concat(componentFiles.jsui || []),
         peripherals: peripherals,
         // Which board profile (profiles/boards.json) this application was
-        // compiled for. The viewer reads it to pick the board drawing, and it is
-        // the only record of the choice in the artifact: the enum the app was
-        // compiled against is the one PinNames.h selects with the define below,
-        // which never reaches the library (libmbed.a is built on the default
-        // board).
-        board: board ? board.board.id : null
+        // compiled for. Every build path records it, "default" included: the
+        // viewer draws the board of the BINARY (the pin values are baked into
+        // wasm), so "no board recorded" is not a state a new artifact can be in
+        // - the viewer reads a manifest without the key as a legacy artifact
+        // compiled against PinNames.h's #else branch, i.e. the default board.
+        board: board && board.board ? board.board.id : 'default'
     };
 
     let args = cFiles
