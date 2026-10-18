@@ -190,15 +190,22 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
         s.preSubscribeChunks.push(data);
         s.preSubscribeBytes += data.length;
 
-        while (s.preSubscribeBytes > MAX_PENDING_BYTES && s.preSubscribeChunks.length > 1) {
-            s.preSubscribeBytes -= s.preSubscribeChunks.shift().length;
-        }
-
         if (s.preSubscribeBytes > MAX_PENDING_BYTES) {
-            consoleLog('Relay socket', id, 'buffered more than', MAX_PENDING_BYTES,
-                'bytes before a subscriber attached; dropping the oldest');
-            s.preSubscribeBytes = 0;
+            // Failing loudly is the point of the cap: dropping the oldest bytes
+            // would corrupt the stream silently, which is the bug this
+            // buffering exists to remove. Record a terminal error (the tab gets
+            // it when it subscribes - see the subscribe handler), release the
+            // buffered bytes and destroy the OS socket so the peer cannot keep
+            // streaming into a socket nobody is reading. The relay record stays
+            // alive to carry that error to the tab.
+            consoleLog('Relay socket', id, 'received more than', MAX_PENDING_BYTES,
+                'bytes before a subscriber attached - failing the connection');
+
             s.preSubscribeChunks = [];
+            s.preSubscribeBytes = 0;
+
+            notifyTerminal(id, 'error');
+            detachAndCloseSocket(s);
         }
     }
 
@@ -222,6 +229,29 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
     }
 
     /**
+     * Tear the OS socket down without removing the relay record. Used when a
+     * terminal event still has to reach a tab that has not subscribed yet (the
+     * pre-subscribe overflow path): the record is what carries that event.
+     */
+    function detachAndCloseSocket(s) {
+        s.removeAllListeners();
+
+        // A write after destroy() emits 'error'; with no listener attached that
+        // would throw, so keep a sink.
+        s.on('error', () => {});
+
+        try {
+            if (s instanceof net.Socket) {
+                s.destroy();
+            }
+            else {
+                s.close();
+            }
+        }
+        catch (ex) {}
+    }
+
+    /**
      * Release a relay socket and every listener it holds: called when the
      * application closes it, when it fails, and when the browser tab that owned
      * it goes away (a relay id never leaves its tab, so such a socket can never
@@ -237,20 +267,7 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
         // detach the listeners so the destroy cannot re-enter this path.
         s.subscribers = [];
 
-        try {
-            s.removeAllListeners();
-        }
-        catch (ex) {}
-
-        try {
-            if (s instanceof net.Socket) {
-                s.destroy();
-            }
-            else {
-                s.close();
-            }
-        }
-        catch (ex) {}
+        detachAndCloseSocket(s);
     }
 
     app.post('/api/network/socket_open/tcp', (req, res, next) => {

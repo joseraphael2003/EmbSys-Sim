@@ -61,6 +61,12 @@ jobs:
       - name: Artifact scan (no unresolved link imports in any demo)
         run: docker run --rm mbed-simulator:ci node build-tools/scan-unresolved-imports.js
 
+      # No browser needed: drives the relay's HTTP + socket.io wire directly and
+      # asserts the pre-subscribe window (bytes preserved under the cap; a loud
+      # terminal error over it).
+      - name: Relay pre-subscribe controls
+        run: docker run --rm mbed-simulator:ci node test/run-t10-relay-controls.js
+
       - name: Headless smoke - blinky
         run: docker run --rm mbed-simulator:ci node cli.js -i demos/blinky -o out --skip-build --launch-headless --scenario scenarios/blinky.json
 
