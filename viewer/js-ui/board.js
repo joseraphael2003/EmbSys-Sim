@@ -1,19 +1,41 @@
 (function() {
 
-    // Determine active board profile
-    var activeBoard = window.activeBoard;
-    if (!activeBoard || activeBoard.indexOf('{{') === 0) {
-        var params = new URLSearchParams(window.location.search);
-        activeBoard = params.get('board') || 'default';
+    var hal = window.MbedJSHal || {};
+    var boards = (hal.PinNames && hal.PinNames.boards) || null;
+    var boardMeta = hal.BoardMeta || {};
+
+    // `boards` is a plain object built from profiles/boards.json, so `boards[id]`
+    // is truthy for every inherited key as well ('constructor', 'toString', ...).
+    // An own-property test is the only correct membership check here: the id can
+    // come from the URL.
+    function isKnownBoard(id) {
+        return typeof id === 'string' && !!boards && Object.prototype.hasOwnProperty.call(boards, id);
     }
 
-    // Validate active board against known profiles
-    var boards = window.MbedJSHal && window.MbedJSHal.PinNames && window.MbedJSHal.PinNames.boards;
-    if (boards && !boards[activeBoard]) {
-        console.warn('[board] Unknown board "' + activeBoard + '", falling back to default.');
-        window.boardFallback = true;
-        window.requestedBoard = activeBoard;
-        activeBoard = 'default';
+    // Which board to draw.
+    //
+    // The server renders the COMPILED board into the page configuration: the
+    // application's pin values are baked into wasm, so the drawing has to follow
+    // the binary (see server/launch-server.js). A page served without the server
+    // has no configuration at all, and falls back to ?board= and then to the
+    // default board.
+    var activeBoard = window.activeBoard;
+    if (!isKnownBoard(activeBoard)) {
+        activeBoard = null;
+    }
+
+    if (!activeBoard) {
+        var params = new URLSearchParams(window.location.search);
+        var urlBoard = params.get('board') || 'default';
+        if (isKnownBoard(urlBoard)) {
+            activeBoard = urlBoard;
+        }
+        else {
+            window.boardFallback = true;
+            window.requestedBoard = urlBoard;
+            activeBoard = 'default';
+            console.warn('[board] Unknown board "' + urlBoard + '", falling back to default.');
+        }
     }
     window.activeBoard = activeBoard;
 
@@ -32,19 +54,67 @@
         window.MbedJSHal.PinNames.boards = boardsRef;
     }
 
-    // Show virtual board simulation banner for non-default boards or fallback notices
+    // The virtual-board notice.
+    //
+    // Built out of DOM nodes, never by concatenating into innerHTML: the unknown
+    // board and the ignored ?board= values are text from the URL, and they have
+    // to stay text.
     var notice = document.querySelector('#virtual-board-notice');
+
+    function showNotice(parts, isWarning) {
+        notice.textContent = '';
+        parts.forEach(function(part) {
+            var node;
+            if (part[0] === 'text') {
+                node = document.createTextNode(part[1]);
+            }
+            else {
+                node = document.createElement(part[0]);
+                node.textContent = part[1];
+            }
+            notice.appendChild(node);
+        });
+        if (isWarning) {
+            notice.classList.add('warning');
+        }
+        else {
+            notice.classList.remove('warning');
+        }
+        notice.style.display = 'block';
+    }
+
+    function boardDisplayName(id) {
+        return (boardMeta[id] && boardMeta[id].displayName) || window.boardName || id;
+    }
+
     if (notice) {
         if (window.boardFallback) {
-            notice.innerHTML = '<strong>Notice:</strong> Unknown board "<code>' + (window.requestedBoard || '') + '</code>", fell back to default profile. Virtual board — pin-level simulation, no register emulation.';
-            notice.classList.add('warning');
-            notice.style.display = 'block';
+            showNotice([
+                [ 'strong', 'Notice: ' ],
+                [ 'text', 'Unknown board "' ],
+                [ 'code', String(window.requestedBoard || '') ],
+                // What was drawn is the compiled board, which is only the
+                // default profile when nothing better was recorded.
+                [ 'text', activeBoard === 'default'
+                    ? '", fell back to default profile. Virtual board — pin-level simulation, no register emulation.'
+                    : '", so the board this program was compiled for is drawn instead. Virtual board — pin-level simulation, no register emulation.' ]
+            ], true);
+        }
+        else if (window.boardMismatch) {
+            showNotice([
+                [ 'strong', 'Notice: ' ],
+                [ 'text', 'this program was compiled for board ' ],
+                [ 'code', activeBoard ],
+                [ 'text', ', so the requested board ' ],
+                [ 'code', String(window.requestedBoard || '') ],
+                [ 'text', ' was ignored. Virtual board — pin-level simulation, no register emulation.' ]
+            ], true);
         }
         else if (activeBoard !== 'default') {
-            var boardDisplay = window.boardName || (activeBoard === 'pico' ? 'Raspberry Pi Pico (RP2040)' : (activeBoard === 'nucleo' ? 'ST Nucleo-F401RE' : activeBoard));
-            notice.innerHTML = '<strong>Virtual board:</strong> ' + boardDisplay + ' — pin-level simulation, no register emulation';
-            notice.classList.remove('warning');
-            notice.style.display = 'block';
+            showNotice([
+                [ 'strong', 'Virtual board: ' ],
+                [ 'text', boardDisplayName(activeBoard) + ' — pin-level simulation, no register emulation' ]
+            ], false);
         }
         else {
             notice.style.display = 'none';
@@ -62,41 +132,41 @@
         });
     }
 
+    // The onboard LEDs and buttons come from the generated board metadata
+    // (MbedJSHal.BoardMeta, built from profiles/boards.json by
+    // build-tools/generate-pinnames.js), so the SVG element ids and the LED
+    // colours live in the board data instead of being restated here.
     function attachHandlers(board) {
-        var ledColors = {
-            default: '#FBBE0E',
-            pico: '#2ecc71',
-            nucleo: '#2ecc71'
-        };
-        var onColor = ledColors[activeBoard] || '#FBBE0E';
+        var meta = boardMeta[activeBoard] || {};
+        var pinMap = (boards && boards[activeBoard]) || {};
+        var peripherals = meta.onboardPeripherals || [];
 
         var builtInLeds = {};
-        var ledPins = [
-            { pin: MbedJSHal.PinNames.LED1, sel: '#led1' },
-            { pin: MbedJSHal.PinNames.LED2, sel: '#led2' },
-            { pin: MbedJSHal.PinNames.LED3, sel: '#led3' },
-            { pin: MbedJSHal.PinNames.LED4, sel: '#led4' }
-        ];
+        var builtInButtons = {};
 
-        ledPins.forEach(function(item) {
+        peripherals.forEach(function(peripheral) {
+            if (!peripheral || !peripheral.svgId || !peripheral.pin) return;
+            if (peripheral.kind !== 'led' && peripheral.kind !== 'button') return;
+
             // Generic fix for §T8.6: skip NC (-1), undefined, and non-numeric pins
-            if (typeof item.pin === 'number' && item.pin >= 0) {
-                var el = board.querySelector(item.sel);
-                if (el) {
-                    builtInLeds[item.pin] = el;
-                    MbedJSHal.gpio.init_out(null, item.pin, 0);
-                }
+            var pin = pinMap[peripheral.pin];
+            if (typeof pin !== 'number' || pin < 0) return;
+
+            var el = board.querySelector(peripheral.svgId);
+            if (!el) return;
+
+            if (peripheral.kind === 'led') {
+                // boards.json validation requires a colour for a wired LED; the
+                // fallback is the default board's amber, for data that slipped
+                // through anyway.
+                builtInLeds[pin] = { el: el, onColor: peripheral.color || '#FBBE0E' };
+                MbedJSHal.gpio.init_out(null, pin, 0);
+            }
+            else {
+                builtInButtons[pin] = el;
+                MbedJSHal.gpio.init_in(null, pin, 0);
             }
         });
-
-        var builtInButtons = {};
-        if (typeof MbedJSHal.PinNames.BUTTON1 === 'number' && MbedJSHal.PinNames.BUTTON1 >= 0) {
-            var btnEl = board.querySelector('#button1');
-            if (btnEl) {
-                builtInButtons[MbedJSHal.PinNames.BUTTON1] = btnEl;
-                MbedJSHal.gpio.init_in(null, MbedJSHal.PinNames.BUTTON1, 0);
-            }
-        }
 
         function setBuiltInLed(pin, value, type) {
             if (type !== MbedJSHal.gpio.TYPE.DIGITAL) {
@@ -104,12 +174,7 @@
             }
             if (!builtInLeds[pin]) return;
 
-            if (value === 1) {
-                builtInLeds[pin].setAttribute('fill', onColor);
-            }
-            else {
-                builtInLeds[pin].setAttribute('fill', 'black');
-            }
+            builtInLeds[pin].el.setAttribute('fill', value === 1 ? builtInLeds[pin].onColor : 'black');
         }
 
         window.MbedJSHal.gpio.on('pin_write', function(pin, value, type) {

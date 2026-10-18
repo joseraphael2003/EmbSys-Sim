@@ -25,7 +25,7 @@
   <section id="board">
       <div id="virtual-board-notice" class="virtual-board-banner"></div>
       <section id="components">
-          <object id="board-svg" data="/{{{svgAsset}}}" type="image/svg+xml" class="board-{{board}}"></object>
+          <object id="board-svg" data="/{{svgAsset}}" type="image/svg+xml" class="board-{{board}}"></object>
       </section>
   </section>
 
@@ -52,13 +52,40 @@
     </div>
   </section>
 
+  <!--
+    Viewer configuration: the board drawing to use, the peripheral list and the
+    board-notice state.
+
+    It is embedded as JSON, never as a JS string literal. hbs' `{{x}}` escapes
+    for HTML, and HTML escaping is not JS-string escaping: it does not touch
+    backslash, so a `\u003c` in a query parameter survived
+    `window.requestedBoard = "{{requestedBoard}}"` and the JS parser decoded it
+    back into markup. The value below is escaped for both contexts by the server
+    (jsonForScript in server/launch-server.js), which is why it is rendered with
+    the triple-stash: it is already encoded, and hbs must not re-encode it.
+  -->
+  <script id="viewer-config" type="application/json">{{{viewerConfig}}}</script>
   <script>
-    window.peripheralsToLoad = {{{peripherals}}};
-    window.activeBoard = "{{board}}";
-    window.boardName = "{{boardName}}";
-    window.boardMcu = "{{boardMcu}}";
-    window.boardFallback = {{#if boardFallback}}true{{else}}false{{/if}};
-    window.requestedBoard = "{{requestedBoard}}";
+    (function() {
+      var config = {};
+      try {
+        config = JSON.parse(document.getElementById('viewer-config').textContent) || {};
+      }
+      catch (ex) {
+        // Served without the server (the template was not substituted), so
+        // there is no configuration: board.js falls back to ?board=.
+        config = {};
+      }
+
+      window.viewerConfig = config;
+      window.peripheralsToLoad = config.peripherals || [];
+      window.activeBoard = config.board || null;
+      window.boardName = config.boardName || null;
+      window.boardMcu = config.boardMcu || null;
+      window.boardFallback = config.boardFallback === true;
+      window.boardMismatch = config.boardMismatch === true;
+      window.requestedBoard = config.requestedBoard || null;
+    })();
   </script>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -77,7 +104,7 @@
   <script type="text/javascript" src="/js-hal/lora.js"></script>
   <script type="text/javascript" src="/js-hal/blockdevice.js"></script>
   {{#each jshal}}
-  <script type="text/javascript" src="{{{script}}}"></script>
+  <script type="text/javascript" src="{{script}}"></script>
   {{/each}}
 
   <!-- UI handling -->
@@ -89,7 +116,7 @@
   <script type="text/javascript" src="/js-ui/components/potentiometer.js"></script>
   <script type="text/javascript" src="/js-ui/components/pwm_speaker.js"></script>
   {{#each jsui}}
-  <script type="text/javascript" src="{{{script}}}"></script>
+  <script type="text/javascript" src="{{script}}"></script>
   {{/each}}
   <script type="text/javascript" src="/js-ui/viewer.js"></script>
 

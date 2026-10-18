@@ -68,6 +68,54 @@ function getDemoData() {
         });
 }
 
+// ---------------------------------------------------------------------------
+// Viewer board plumbing
+// ---------------------------------------------------------------------------
+
+/**
+ * Serialise a value for a <script> element.
+ *
+ * The viewer's configuration carries values that originate in a query
+ * parameter, and it has to survive two contexts that escape differently:
+ *
+ *   - HTML, where hbs' `{{x}}` escapes `&<>"'` but NOT backslash. That is how
+ *     the old `window.requestedBoard = "{{requestedBoard}}"` let a `\u003c`
+ *     escape through untouched and the JS parser turned it back into real
+ *     markup (reflected DOM XSS).
+ *   - The JS/JSON string the value lands in.
+ *
+ * JSON-encoding plus escaping `<`, `>`, `&` and the two Unicode line separators
+ * satisfies both: the result can neither close the element (`</script>`) nor
+ * open a tag, and it cannot terminate the literal it sits in. The template
+ * renders it with `{{{ }}}` for that reason alone - the value is already
+ * encoded, so hbs must not touch it again.
+ */
+function jsonForScript(value) {
+    return JSON.stringify(value)
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026')
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029');
+}
+
+/**
+ * The only shape in which an untrusted board value is echoed back (to the page
+ * or to the log): board ids are lowercase slugs, so a real one never changes
+ * under this, and anything else is bounded in length and free of control
+ * characters.
+ */
+function describeBoardValue(value) {
+    let s = String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
+    if (s.length > 64) s = s.slice(0, 64) + '...';
+    return s;
+}
+
+/** Is `id` one of the board ids declared in profiles/boards.json? */
+function knownBoardId(allBoards, id) {
+    return typeof id === 'string' && allBoards.boards.some(b => b.board.id === id);
+}
+
 /**
  * Start a web server to run simulated applications
  *
@@ -507,40 +555,44 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             jshal = normalize(jshal);
             jsui = normalize(jsui);
 
-            // Board resolution order:
-            // 1. Manifest board (authoritative for compiled wasm)
-            // 2. URL ?board= parameter
-            // 3. Fallback to default
+            // Which board to DRAW: the compiled one.
+            //
+            // The application's pin values are baked into wasm by
+            // -DTARGET_BOARD_<X>, so the drawing has to follow the BINARY. Every
+            // build path records the board it compiled for in the .components
+            // manifest, "default" included (cli.js / build-application.js). A
+            // manifest without the key is a legacy artifact built before that
+            // was recorded: PinNames.h's #else branch is the default board, so
+            // it is read as 'default' rather than as "no board recorded".
+            //
+            // ?board= can therefore never change what is drawn. It is honoured
+            // only when it agrees with the manifest; a conflicting value is
+            // reported to the viewer, which shows a visible mismatch banner
+            // (viewer/js-ui/board.js) instead of a drawing that does not match
+            // the running program.
             let allBoards = pinnames.loadBoards();
-            let manifestBoardId = components && components.board ? String(components.board).trim() : null;
+            let compiledBoardId = (components && components.board) ? String(components.board).trim() : 'default';
+            let resolvedBoardId = knownBoardId(allBoards, compiledBoardId) ? compiledBoardId : 'default';
+            let boardFallback = resolvedBoardId !== compiledBoardId;
+            let boardMismatch = false;
+            let requestedBoard = null;
             let urlBoardId = req.query.board ? String(req.query.board).trim() : null;
-            let resolvedBoardId = 'default';
-            let boardFallback = false;
-            let requestedBoard = urlBoardId || manifestBoardId || 'default';
 
-            if (manifestBoardId) {
-                if (urlBoardId && urlBoardId !== manifestBoardId) {
-                    console.warn(`[server] Warning: requested ?board=${urlBoardId} conflicts with compiled manifest board=${manifestBoardId}. Using manifest board.`);
-                }
-                try {
-                    pinnames.boardById(allBoards, manifestBoardId);
-                    resolvedBoardId = manifestBoardId;
-                }
-                catch (e) {
-                    console.warn(`[server] Warning: manifest board '${manifestBoardId}' unknown, falling back to default.`);
-                    boardFallback = true;
-                    resolvedBoardId = 'default';
-                }
+            if (boardFallback) {
+                requestedBoard = describeBoardValue(compiledBoardId);
+                console.warn('[server] Warning: manifest board "' + requestedBoard + '" is not in profiles/boards.json, falling back to the default board.');
             }
-            else if (urlBoardId) {
-                try {
-                    pinnames.boardById(allBoards, urlBoardId);
-                    resolvedBoardId = urlBoardId;
+
+            if (!boardFallback && urlBoardId !== null && urlBoardId !== resolvedBoardId) {
+                if (knownBoardId(allBoards, urlBoardId)) {
+                    boardMismatch = true;
+                    requestedBoard = urlBoardId;
+                    console.warn('[server] Warning: requested ?board=' + urlBoardId + ' conflicts with the compiled board ' + resolvedBoardId + '; drawing the compiled board.');
                 }
-                catch (e) {
-                    console.warn(`[server] Warning: unknown board '${urlBoardId}', falling back to default.`);
+                else {
                     boardFallback = true;
-                    resolvedBoardId = 'default';
+                    requestedBoard = describeBoardValue(urlBoardId);
+                    console.warn('[server] Warning: unknown board "' + requestedBoard + '" requested, falling back to the default board.');
                 }
             }
 
@@ -551,14 +603,18 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
                 script: req.params.script,
                 jshal: jshal,
                 jsui: jsui,
-                peripherals: JSON.stringify(peripherals),
                 version: version,
                 board: resolvedBoardId,
-                boardName: boardObj ? boardObj.board.displayName : 'Default',
-                boardMcu: boardObj ? boardObj.board.mcu : '',
                 svgAsset: svgAsset,
-                boardFallback: boardFallback,
-                requestedBoard: requestedBoard
+                viewerConfig: jsonForScript({
+                    peripherals: peripherals,
+                    board: resolvedBoardId,
+                    boardName: boardObj ? boardObj.board.displayName : 'Default',
+                    boardMcu: boardObj ? boardObj.board.mcu : '',
+                    boardFallback: boardFallback,
+                    boardMismatch: boardMismatch,
+                    requestedBoard: requestedBoard
+                })
             });
         })().catch(err => {
             return next(err);
@@ -673,7 +729,11 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
             console.timeEnd('compile' + id);
 
             consoleLog('Compilation failed', id, err);
-            res.status(400).send(err && err.message || String(err));
+            // Plain text, never HTML: the message names the board id the caller
+            // sent, and express would otherwise label the body text/html. The
+            // body parser is JSON-only, so this is not cross-site reachable
+            // today - but a reflected value must not get an HTML content type.
+            res.status(400).type('text/plain').send(String((err && err.message) || err));
         });
     });
 

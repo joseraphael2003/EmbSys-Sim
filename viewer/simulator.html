@@ -85,12 +85,19 @@ int main() {
           noticeEl.style.display = msg ? 'block' : 'none';
           noticeEl.style.color = isError ? '#a00' : '#7a5c00';
       }
-      var knownBoards = (window.MbedJSHal && window.MbedJSHal.PinNames && window.MbedJSHal.PinNames.boards) || { default: true, pico: true, nucleo: true };
+      // Board ids arrive from the URL (the ?board= parameter and the #lab=
+      // payload), so membership is an own-property test: a plain object answers
+      // truthily for inherited keys like 'constructor' as well. The map itself
+      // is generated from profiles/boards.json (viewer/js-hal/pinnames.js).
+      var knownBoards = (window.MbedJSHal && window.MbedJSHal.PinNames && window.MbedJSHal.PinNames.boards) || {};
+      function isKnownBoard(id) {
+          return typeof id === 'string' && Object.prototype.hasOwnProperty.call(knownBoards, id);
+      }
       var urlParams = new URLSearchParams(window.location.search);
       var urlBoard = urlParams.get('board');
       var currentBoard = 'default';
       if (urlBoard) {
-          if (knownBoards[urlBoard]) {
+          if (isKnownBoard(urlBoard)) {
               currentBoard = urlBoard;
           } else {
               setNotice('Unknown board "' + urlBoard + '", falling back to default board.', true);
@@ -178,7 +185,7 @@ int main() {
               return;
           }
           if (parsed.board) {
-              if (knownBoards[parsed.board]) {
+              if (isKnownBoard(parsed.board)) {
                   window.currentBoard = parsed.board;
               } else {
                   setNotice('Unknown board "' + parsed.board + '", falling back to default board.', true);
@@ -196,7 +203,7 @@ int main() {
           editor.selection.clearSelection();
           editor.selection.moveCursorTo(0, 0);
           persistModel(parsed.model);
-          if (!parsed.error && (!parsed.board || knownBoards[parsed.board])) {
+          if (!parsed.error && (!parsed.board || isKnownBoard(parsed.board))) {
               setNotice('', false);
           }
       }
