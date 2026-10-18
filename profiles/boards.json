@@ -593,28 +593,32 @@
                     "kind": "led",
                     "label": "LED1",
                     "pin": "LED1",
-                    "svgId": "#led1"
+                    "svgId": "#led1",
+                    "color": "#FBBE0E"
                 },
                 {
                     "id": "led2",
                     "kind": "led",
                     "label": "LED2",
                     "pin": "LED2",
-                    "svgId": "#led2"
+                    "svgId": "#led2",
+                    "color": "#FBBE0E"
                 },
                 {
                     "id": "led3",
                     "kind": "led",
                     "label": "LED3",
                     "pin": "LED3",
-                    "svgId": "#led3"
+                    "svgId": "#led3",
+                    "color": "#FBBE0E"
                 },
                 {
                     "id": "led4",
                     "kind": "led",
                     "label": "LED4",
                     "pin": "LED4",
-                    "svgId": "#led4"
+                    "svgId": "#led4",
+                    "color": "#FBBE0E"
                 },
                 {
                     "id": "button1",
@@ -1683,7 +1687,7 @@
                     "label": "onboard LED",
                     "pin": "LED1",
                     "svgId": "#led1",
-                    "color": "green",
+                    "color": "#2ecc71",
                     "note": "GP25"
                 },
                 {
@@ -2833,7 +2837,7 @@
                     "label": "LD2 (green user LED)",
                     "pin": "LED1",
                     "svgId": "#led1",
-                    "color": "green"
+                    "color": "#2ecc71"
                 },
                 {
                     "id": "led2",

@@ -272,6 +272,22 @@ function validateBoard(board) {
         if (peripheral.pin !== null && peripheral.pin !== undefined && !byName.has(peripheral.pin)) {
             throw fail(`boards.json: board '${board.id}': onboard peripheral '${peripheral.id}' is wired to '${peripheral.pin}', which is not a pin of this board`);
         }
+        // svgId and color are consumed by the viewer (js-ui/board.js): svgId is a
+        // querySelector argument and color is the fill the part lights up with,
+        // so both are validated here rather than trusted there.
+        if (peripheral.svgId !== null && peripheral.svgId !== undefined) {
+            if (typeof peripheral.svgId !== 'string' || !/^#[A-Za-z][A-Za-z0-9_-]*$/.test(peripheral.svgId)) {
+                throw fail(`boards.json: board '${board.id}': onboard peripheral '${peripheral.id}': 'svgId' must be an element id like "#led1"`);
+            }
+        }
+        if (peripheral.color !== null && peripheral.color !== undefined) {
+            if (typeof peripheral.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(peripheral.color)) {
+                throw fail(`boards.json: board '${board.id}': onboard peripheral '${peripheral.id}': 'color' must be a '#rrggbb' string`);
+            }
+        }
+        if (peripheral.kind === 'led' && peripheral.svgId && peripheral.pin && !peripheral.color) {
+            throw fail(`boards.json: board '${board.id}': onboard LED '${peripheral.id}' has an svgId and a pin but no 'color': the viewer has nothing to light it up with`);
+        }
         peripherals.set(peripheral.id, peripheral);
     }
     for (const pin of pins) {
@@ -531,6 +547,34 @@ function renderHeader(loaded) {
 // JavaScript
 // ---------------------------------------------------------------------------
 
+// The board facts the viewer needs that are not pin values: what to call the
+// board, which drawing to load, and the parts soldered to it (SVG element id,
+// the pin that drives them, and the fill an LED lights up with). Emitted from
+// the same descriptors as the pin maps so the viewer has one source for both -
+// before this, board.js carried its own copy of `#led1..#led4`/`#button1`, the
+// per-board display names and the per-board LED colour.
+function renderBoardMeta(loaded) {
+    const meta = {};
+
+    for (const board of loaded.boards) {
+        meta[board.board.id] = {
+            displayName: board.board.displayName,
+            mcu: board.board.mcu || null,
+            svgAsset: board.board.svgAsset || null,
+            onboardPeripherals: (board.board.onboardPeripherals || []).map((peripheral) => ({
+                id: peripheral.id,
+                kind: peripheral.kind || null,
+                label: peripheral.label,
+                pin: peripheral.pin === undefined ? null : peripheral.pin,
+                svgId: peripheral.svgId === undefined ? null : peripheral.svgId,
+                color: peripheral.color === undefined ? null : peripheral.color,
+            })),
+        };
+    }
+
+    return JSON.stringify(meta, null, 4);
+}
+
 function renderJs(loaded) {
     const L = [];
 
@@ -550,6 +594,9 @@ function renderJs(loaded) {
     L.push('// number: code that enumerates the map (the pin dropdown in viewer.js, the');
     L.push('// reverse lookup in components/base_component.js) has to skip non-numbers, or');
     L.push('// it will offer "boards" as a pin.');
+    L.push('//');
+    L.push('// MbedJSHal.BoardMeta (below) carries the non-pin board facts for the same');
+    L.push('// boards: display name, drawing, and the parts soldered to them.');
     L.push('window.MbedJSHal = window.MbedJSHal || {};');
     L.push('');
     L.push('(function(boards) {');
@@ -587,6 +634,10 @@ function renderJs(loaded) {
     });
 
     L.push(blocks.join(',\n') + '\n});');
+    L.push('');
+    L.push('// Board metadata (display name, drawing, onboard parts) - the same');
+    L.push('// profiles/boards.json descriptors the pin maps above come from.');
+    L.push('window.MbedJSHal.BoardMeta = ' + renderBoardMeta(loaded) + ';');
 
     return L.join('\n');
 }

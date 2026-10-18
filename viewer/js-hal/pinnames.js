@@ -14,6 +14,9 @@
 // number: code that enumerates the map (the pin dropdown in viewer.js, the
 // reverse lookup in components/base_component.js) has to skip non-numbers, or
 // it will offer "boards" as a pin.
+//
+// MbedJSHal.BoardMeta (below) carries the non-pin board facts for the same
+// boards: display name, drawing, and the parts soldered to them.
 window.MbedJSHal = window.MbedJSHal || {};
 
 (function(boards) {
@@ -206,3 +209,197 @@ window.MbedJSHal = window.MbedJSHal || {};
         'SPI_CS': 4
     }
 });
+
+// Board metadata (display name, drawing, onboard parts) - the same
+// profiles/boards.json descriptors the pin maps above come from.
+window.MbedJSHal.BoardMeta = {
+    "default": {
+        "displayName": "mbed LPC1768 (simulator default)",
+        "mcu": "NXP LPC1768 (Arm Cortex-M3 @ 96 MHz)",
+        "svgAsset": "viewer/img/controller_mbed.svg",
+        "onboardPeripherals": [
+            {
+                "id": "led1",
+                "kind": "led",
+                "label": "LED1",
+                "pin": "LED1",
+                "svgId": "#led1",
+                "color": "#FBBE0E"
+            },
+            {
+                "id": "led2",
+                "kind": "led",
+                "label": "LED2",
+                "pin": "LED2",
+                "svgId": "#led2",
+                "color": "#FBBE0E"
+            },
+            {
+                "id": "led3",
+                "kind": "led",
+                "label": "LED3",
+                "pin": "LED3",
+                "svgId": "#led3",
+                "color": "#FBBE0E"
+            },
+            {
+                "id": "led4",
+                "kind": "led",
+                "label": "LED4",
+                "pin": "LED4",
+                "svgId": "#led4",
+                "color": "#FBBE0E"
+            },
+            {
+                "id": "button1",
+                "kind": "button",
+                "label": "Button 1",
+                "pin": "BUTTON1",
+                "svgId": "#button1",
+                "color": null
+            },
+            {
+                "id": "u1",
+                "kind": "mcu",
+                "label": "LPC1768",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "usb1",
+                "kind": "connector",
+                "label": "USB (drag-and-drop programming + serial)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            }
+        ]
+    },
+    "pico": {
+        "displayName": "Raspberry Pi Pico (RP2040)",
+        "mcu": "Raspberry Pi RP2040 (dual Arm Cortex-M0+ @ 133 MHz)",
+        "svgAsset": "viewer/img/controller_pico.svg",
+        "onboardPeripherals": [
+            {
+                "id": "led1",
+                "kind": "led",
+                "label": "onboard LED",
+                "pin": "LED1",
+                "svgId": "#led1",
+                "color": "#2ecc71"
+            },
+            {
+                "id": "button1",
+                "kind": "button",
+                "label": "BOOTSEL",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "u1",
+                "kind": "mcu",
+                "label": "RP2040",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "u2",
+                "kind": "memory",
+                "label": "2 MB QSPI flash (W25Q16JV)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "usb1",
+                "kind": "connector",
+                "label": "micro-USB B",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "debug1",
+                "kind": "debug",
+                "label": "3-pin SWD debug pads (SWCLK/GND/SWDIO)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            }
+        ]
+    },
+    "nucleo": {
+        "displayName": "ST Nucleo-F401RE",
+        "mcu": "ST STM32F401RET6 (Arm Cortex-M4F @ 84 MHz)",
+        "svgAsset": "viewer/img/controller_nucleo.svg",
+        "onboardPeripherals": [
+            {
+                "id": "led1",
+                "kind": "led",
+                "label": "LD2 (green user LED)",
+                "pin": "LED1",
+                "svgId": "#led1",
+                "color": "#2ecc71"
+            },
+            {
+                "id": "led2",
+                "kind": "led",
+                "label": "LD1 (USB communication LED)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "led3",
+                "kind": "led",
+                "label": "LD3 (power LED)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "button1",
+                "kind": "button",
+                "label": "B1 (blue user button)",
+                "pin": "BUTTON1",
+                "svgId": "#button1",
+                "color": null
+            },
+            {
+                "id": "button2",
+                "kind": "button",
+                "label": "B2 (black reset button)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "u1",
+                "kind": "mcu",
+                "label": "STM32F401RET6",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "u2",
+                "kind": "debug",
+                "label": "ST-Link/V2-1 (SWD + virtual COM port)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            },
+            {
+                "id": "usb1",
+                "kind": "connector",
+                "label": "mini-USB B (on the ST-Link side)",
+                "pin": null,
+                "svgId": null,
+                "color": null
+            }
+        ]
+    }
+};
