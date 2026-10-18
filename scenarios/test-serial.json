@@ -1,0 +1,22 @@
+{
+    "name": "test-serial",
+    "timeoutMs": 45000,
+    "steps": [
+        {
+            "name": "UnbufferedSerial pc(USBTX, USBRX) reaches the console",
+            "timeoutMs": 20000,
+            "assert": {
+                "type": "serial",
+                "regex": "hi"
+            }
+        },
+        {
+            "name": "USBTX/USBRX resolve through CE's alias macro to the console pads",
+            "timeoutMs": 15000,
+            "assert": {
+                "type": "serial",
+                "regex": "SERIAL:MACRO-MATCH=1"
+            }
+        }
+    ]
+}

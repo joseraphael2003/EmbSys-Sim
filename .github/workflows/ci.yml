@@ -83,6 +83,19 @@ jobs:
         run: |
           docker run --rm mbed-simulator:ci bash -c "node cli.js -i demos/blinky -o out/blinky-pico.js --board pico && node cli.js -i demos/blinky -o out/blinky-pico.js --board pico --skip-build --launch-headless --scenario scenarios/pico-smoke.json && node cli.js -i demos/blinky -o out/blinky-nucleo.js --board nucleo && node cli.js -i demos/blinky -o out/blinky-nucleo.js --board nucleo --skip-build --launch-headless --scenario scenarios/nucleo-smoke.json"
 
+      # No demo uses UnbufferedSerial, so nothing above would notice if the
+      # symbol it needs (core_util_in_critical_section, defined in a
+      # mbed-os/platform/source file the component manifest did not list) went
+      # missing from libmbed.a again - and the migration guide teaches this exact
+      # API to students. Building the fixture and RUNNING it covers both the pin
+      # resolution and the link closure: cli.js refuses to start an artifact with
+      # unresolved imports, so the scenario step alone fails on the hole. Same
+      # per-board output naming as the board smoke step, so the .components
+      # manifests cannot clobber each other.
+      - name: Serial gate - UnbufferedSerial(USBTX, USBRX) on default, pico and nucleo
+        run: |
+          docker run --rm mbed-simulator:ci bash -c "node cli.js -i test/fixtures/test-serial -o out/test-serial.js && node cli.js -i test/fixtures/test-serial -o out/test-serial.js --skip-build --launch-headless --scenario scenarios/test-serial.json && node cli.js -i test/fixtures/test-serial -o out/test-serial-pico.js --board pico && node cli.js -i test/fixtures/test-serial -o out/test-serial-pico.js --board pico --skip-build --launch-headless --scenario scenarios/test-serial.json && node cli.js -i test/fixtures/test-serial -o out/test-serial-nucleo.js --board nucleo && node cli.js -i test/fixtures/test-serial -o out/test-serial-nucleo.js --board nucleo --skip-build --launch-headless --scenario scenarios/test-serial.json"
+
   network-smoke:
     name: Public-internet demo scenarios (scheduled, non-blocking)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
