@@ -4,8 +4,8 @@
  *
  * TARGET_SIMULATOR cooperative sleep seam (Mbed CE port).
  *
- * Replaces three Mbed CE platform sources that are excluded from the
- * simulator build via .simignore:
+ * Replaces three Mbed CE platform sources that the component manifest
+ * (build-tools/build-libmbed.js) does not build:
  *   - platform/source/mbed_wait_api_no_rtos.c  (wait_us/wait_ns C API)
  *   - platform/source/mbed_thread.cpp          (get_ms_count/thread_sleep_*)
  *   - platform/source/mbed_os_timer.cpp        (do_timed_sleep_* machinery)

@@ -18,8 +18,9 @@
 namespace rtos {
 namespace Kernel {
 
-// CE defines this in the rtos/source/Kernel.cpp that .simignore excludes;
-// without it the app links an import and dies at runtime ("missing function").
+// CE defines this in the rtos/source/Kernel.cpp that the component manifest
+// does not build; without it the app links an import and dies at runtime
+// ("missing function").
 uint64_t get_ms_count() {
     return impl::get_tick_count();
 }

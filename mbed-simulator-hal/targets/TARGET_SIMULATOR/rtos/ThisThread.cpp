@@ -4,7 +4,7 @@
  *
  * TARGET_SIMULATOR vendored rtos::ThisThread implementation (Mbed CE port).
  *
- * Replaces rtos/source/ThisThread.cpp (excluded via .simignore). The CE
+ * Replaces rtos/source/ThisThread.cpp (not in the component manifest). The CE
  * no-RTOS branch of that file ends in `asm("yield")`, which has no meaning
  * for wasm compilation, and its sleep path routes through the OsTimer
  * machinery we deliberately do not compile (see mbed_wait_api_no_rtos.cpp).

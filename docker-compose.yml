@@ -1,5 +1,3 @@
-version: "3"
-
 services:
   mbed-sim:
     build:

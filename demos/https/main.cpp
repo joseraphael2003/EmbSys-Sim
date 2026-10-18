@@ -17,7 +17,15 @@
 using namespace std::chrono;
 
 /* List of trusted root CA certificates
- * currently one: ISRG Root X1, the CA for postman-echo.com
+ * currently one: ISRG Root X1 (RSA), which is where postman-echo.com's chain
+ * ends. The server does not send a leaf issued directly by X1 - it sends
+ *   postman-echo.com <- Let's Encrypt "YE2" <- ISRG "Root YE" <- ISRG Root X2
+ * plus the ISRG-Root-X2-signed-by-X1 cross-certificate, and verification
+ * reaches X1 through that cross-cert (measured 2026-10-19: `openssl verify
+ * -CAfile <X1> -untrusted <the three intermediates>` = OK, depth 4 at ISRG
+ * Root X1; without the cross-cert the same command fails with "unable to get
+ * local issuer certificate"). The demo therefore keeps working while
+ * Let's Encrypt keeps serving the cross-cert.
  *
  * To add more root certificates, just concatenate them.
  */

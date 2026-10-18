@@ -768,8 +768,8 @@ const COMPONENTS = [
         // mbed-client-pal/Source/Port/Reference-Impl/OS_Specific/mbedOS/{RTOS/pal_plat_rtos.cpp,
         // Storage/FileSystem/pal_plat_fileSystem.cpp} plus the FreeRTOS and Linux
         // equivalents - they are OS5-RTOS and Linux-glibc ports, and they are
-        // listed nowhere in this manifest (not as sources, not in the excluded
-        // subtree list because that list only records what a walk skipped).
+        // listed nowhere in this manifest (not as sources, not as a deferred
+        // root).
         // This also merges the previous include-only pelion-dm:config component:
         // its reason ("the Pelion stack sources are not ported yet") stopped being
         // true the moment these files landed, and a second component for the same
@@ -811,7 +811,7 @@ const NOT_YET_PORTED = [
 //   1. every component has a name and no two share one;
 //   2. every declared `sources`/`files`/`includes` path exists. This is the
 //      check that would have caught the Pelion flashiap leak (a `sources`
-//      entry naming a subtree the walk had excluded) and catches the whole
+//      entry naming a subtree that was not actually built) and catches the whole
 //      class of "root renamed or deleted, manifest still promises it";
 //   3. a root is wired or deferred, never both (T2's rule);
 //   4. a deferred root that is not in the tree is a lie about the graph.
