@@ -4,6 +4,10 @@ editor.getSession().setMode("ace/mode/c_cpp");
 
 var simulatorFrame = document.querySelector('#viewer iframe');
 var compilationFailed = document.querySelector('#compilation-failed');
+// A compiled user artifact: its manifest records the board it was compiled for,
+// so ?board= is redundant-but-honest here (the viewer reports a mismatch if the
+// artifact and the parameter ever disagree). Demo names go through
+// window.demoViewUrl instead, which picks the per-board preview build.
 function getViewUrl(name) {
     var b = window.currentBoard;
     return '/view/' + name + (b && b !== 'default' ? '?board=' + encodeURIComponent(b) : '');
@@ -47,7 +51,7 @@ function load_demo(demo) {
         if (x.status === 200) {
             sessionStorage.removeItem('model-dirty');
 
-            simulatorFrame.src = getViewUrl(demo);
+            simulatorFrame.src = window.demoViewUrl(demo);
             simulatorFrame.style.display = 'block';
             compilationFailed.style.display = 'none';
 

@@ -320,7 +320,10 @@ async function main() {
                 scriptsOnPage: document.querySelectorAll('script[src*="onerror"]').length,
                 activeBoard: window.activeBoard,
                 requestedBoard: window.requestedBoard,
-                configBoard: window.viewerConfig && window.viewerConfig.board,
+                configBoard: (function() {
+                    try { return JSON.parse(document.getElementById('viewer-config').textContent).board; }
+                    catch (ex) { return null; }
+                })(),
                 svgAsset: svg.getAttribute('data')
             };
         });
@@ -343,11 +346,16 @@ async function main() {
     // inline config script (the viewer then had no board at all).
     console.log('  ... trailing backslash');
     await page.goto(`http://localhost:${PORT}/view/blinky?board=${encodeURIComponent('x\\')}`, { waitUntil: 'networkidle0' });
-    const backslashState = await page.evaluate(() => ({
-        config: window.viewerConfig || null,
-        activeBoard: window.activeBoard,
-        noticeText: document.querySelector('#virtual-board-notice').textContent
-    }));
+    const backslashState = await page.evaluate(() => {
+        var config = null;
+        try { config = JSON.parse(document.getElementById('viewer-config').textContent); }
+        catch (ex) { config = null; }
+        return {
+            config: config,
+            activeBoard: window.activeBoard,
+            noticeText: document.querySelector('#virtual-board-notice').textContent
+        };
+    });
     assert(!!backslashState.config, 'a trailing backslash no longer breaks the inline config script');
     assert(backslashState.activeBoard === 'default', `the default board is drawn for the backslash payload: ${JSON.stringify(backslashState.activeBoard)}`);
     assert(backslashState.noticeText.indexOf('x\\') !== -1, `the notice shows the backslash payload literally: ${JSON.stringify(backslashState.noticeText)}`);
@@ -516,6 +524,89 @@ async function main() {
     for (const manifestPath of legacyPaths) {
         fs.unlinkSync(manifestPath);
     }
+
+    // ------------------------------------------------------------------------
+    // Test 10: the parent page loads the per-board preview of the default demo
+    // ------------------------------------------------------------------------
+    console.log('\n--- Test 10: ?board=nucleo and a #lab= pico link draw their own board before Run ---');
+
+    // The child frame of the editor page: which board it draws, whether it warns
+    // about an ignored request, and whether its onboard LED toggles on its own.
+    async function readDemoFrame() {
+        const handle = await page.$('#viewer iframe');
+        const frame = await handle.contentFrame();
+        await frame.waitForSelector('#board-svg');
+        await frame.waitForFunction(() => {
+            const svg = document.querySelector('#board-svg');
+            return svg && svg.contentDocument && svg.contentDocument.rootElement;
+        });
+
+        const state = await frame.evaluate(() => {
+            const notice = document.querySelector('#virtual-board-notice');
+            return {
+                activeBoard: window.activeBoard,
+                boardMismatch: window.boardMismatch,
+                boardFallback: window.boardFallback,
+                svgAsset: document.querySelector('#board-svg').getAttribute('data'),
+                noticeText: notice.textContent
+            };
+        });
+
+        const fills = new Set();
+        for (let i = 0; i < 16; i++) {
+            fills.add(await frame.evaluate(() => {
+                const doc = document.querySelector('#board-svg').contentDocument;
+                const led = doc && doc.querySelector('#led1');
+                return led ? led.getAttribute('fill') : 'no-#led1';
+            }));
+            if (fills.has('#2ecc71')) break;
+            await new Promise((r) => setTimeout(r, 250));
+        }
+
+        return Object.assign(state, { fills: [...fills] });
+    }
+
+    await page.goto(`http://localhost:${PORT}/?board=nucleo`, { waitUntil: 'networkidle0' });
+    const nucleoParent = await page.evaluate(() => ({
+        currentBoard: window.currentBoard,
+        defaultDemo: window.defaultDemo,
+        iframeSrc: document.querySelector('#viewer iframe').getAttribute('src')
+    }));
+    assert(nucleoParent.currentBoard === 'nucleo', `the parent page selects nucleo, got: ${JSON.stringify(nucleoParent.currentBoard)}`);
+    assert(nucleoParent.iframeSrc.indexOf('/view/blinky-nucleo') !== -1,
+        `the parent page loads the nucleo preview build, got: ${nucleoParent.iframeSrc}`);
+
+    const nucleoFrame = await readDemoFrame();
+    assert(nucleoFrame.activeBoard === 'nucleo', `the preview draws nucleo, got: ${JSON.stringify(nucleoFrame.activeBoard)}`);
+    assert(nucleoFrame.svgAsset.indexOf('controller_nucleo.svg') !== -1, `the nucleo drawing is loaded: ${nucleoFrame.svgAsset}`);
+    assert(nucleoFrame.boardMismatch !== true && nucleoFrame.boardFallback !== true,
+        'no mismatch/fallback warning before Run');
+    assert(nucleoFrame.noticeText.indexOf('Nucleo') !== -1 && nucleoFrame.noticeText.indexOf('ignored') === -1,
+        `the preview shows the nucleo banner, not a warning: ${JSON.stringify(nucleoFrame.noticeText)}`);
+    assert(nucleoFrame.fills.indexOf('#2ecc71') !== -1,
+        `the nucleo preview's onboard LED toggles before Run (observed fills: ${JSON.stringify(nucleoFrame.fills)})`);
+
+    // The same through a #lab= share link: the board travels in the payload.
+    const picoLabHash = await page.evaluate(() => {
+        window.currentBoard = 'pico';
+        return window.labShare.build('int main() {}');
+    });
+    await page.goto(`http://localhost:${PORT}/${picoLabHash}`, { waitUntil: 'networkidle0' });
+    const picoParent = await page.evaluate(() => ({
+        currentBoard: window.currentBoard,
+        iframeSrc: document.querySelector('#viewer iframe').getAttribute('src')
+    }));
+    assert(picoParent.currentBoard === 'pico', `the #lab= payload selects pico, got: ${JSON.stringify(picoParent.currentBoard)}`);
+    assert(picoParent.iframeSrc.indexOf('/view/blinky-pico') !== -1,
+        `the #lab= link loads the pico preview build, got: ${picoParent.iframeSrc}`);
+
+    const picoFrame = await readDemoFrame();
+    assert(picoFrame.activeBoard === 'pico', `the preview draws pico, got: ${JSON.stringify(picoFrame.activeBoard)}`);
+    assert(picoFrame.svgAsset.indexOf('controller_pico.svg') !== -1, `the pico drawing is loaded: ${picoFrame.svgAsset}`);
+    assert(picoFrame.boardMismatch !== true && picoFrame.boardFallback !== true,
+        'no mismatch/fallback warning before Run for the #lab= link');
+    assert(picoFrame.fills.indexOf('#2ecc71') !== -1,
+        `the pico preview's onboard LED toggles before Run (observed fills: ${JSON.stringify(picoFrame.fills)})`);
 
     await browser.close();
 

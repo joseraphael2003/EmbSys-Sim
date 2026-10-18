@@ -219,6 +219,8 @@ The names a program may use (`LED1`, `BUTTON1`, `p5`, `GP25`, `PA_5`, `D4`, ...)
 
 The chosen board is recorded in the build's `.components` manifest - for every build, `default` included - and that is what lets the viewer draw the right board. The drawing follows the binary: the pin values are baked into the wasm at compile time, so a conflicting `?board=` in the URL is ignored and reported with a visible mismatch banner rather than drawing a board the program was never compiled for.
 
+The editor page loads a per-board preview of the default demo (`out/blinky-<board>.js`, built by `build-demos.js` from the boards in `profiles/boards.json`) so that selecting a board shows that board's drawing - and its onboard LED running - before you press Run. A demo that has no preview is served as it is and drawn on the board it was compiled for (the default), with the ignored `?board=` reported.
+
 `profiles/boards.json` is the single source of truth for all of this: `PinNames.h` and `viewer/js-hal/pinnames.js` are *generated* from it (see below). The board only changes the application's pins - `libmbed.a` is compiled once for the default board and is shared by every board, because no library translation unit binds a concrete pin value.
 
 ## Changing the pin tables

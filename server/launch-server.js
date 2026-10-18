@@ -52,20 +52,27 @@ function getDemoData() {
     const demosDirents = fs.readdirSync(
         Path.join(__dirname, '..', demosDirectory), { withFileTypes: true }
     );
-    return demosDirents
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => {
-            const config = JSON.parse(
-                fs.readFileSync(
-                    Path.join(demosDirectory, dirent.name, 'simconfig.json')
-                )
-            );
-            return {
-                "id": dirent.name,
-                "name": config.name,
-                "selected": dirent.name === demosConfig.default
-            }
-        });
+    return {
+        // The demo the page loads when nothing else is selected. build-demos.js
+        // reads the same key to name the per-board previews
+        // (out/<defaultDemo>-<board>.js), so the page and the artifacts cannot
+        // disagree about which demo has them.
+        defaultDemo: demosConfig.default,
+        demos: demosDirents
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => {
+                const config = JSON.parse(
+                    fs.readFileSync(
+                        Path.join(demosDirectory, dirent.name, 'simconfig.json')
+                    )
+                );
+                return {
+                    "id": dirent.name,
+                    "name": config.name,
+                    "selected": dirent.name === demosConfig.default
+                }
+            })
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -592,7 +599,10 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
                 else {
                     boardFallback = true;
                     requestedBoard = describeBoardValue(urlBoardId);
-                    console.warn('[server] Warning: unknown board "' + requestedBoard + '" requested, falling back to the default board.');
+                    // The request is ignored; what is drawn is the COMPILED
+                    // board, which is only the default profile when the manifest
+                    // recorded nothing better.
+                    console.warn('[server] Warning: unknown board "' + requestedBoard + '" requested; drawing the compiled board ' + resolvedBoardId + '.');
                 }
             }
 
@@ -610,7 +620,6 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
                     peripherals: peripherals,
                     board: resolvedBoardId,
                     boardName: boardObj ? boardObj.board.displayName : 'Default',
-                    boardMcu: boardObj ? boardObj.board.mcu : '',
                     boardFallback: boardFallback,
                     boardMismatch: boardMismatch,
                     requestedBoard: requestedBoard
@@ -707,11 +716,12 @@ module.exports = function(outFolder, port, staticMaxAge, runtimeLogs, callback) 
     });
 
     app.get('/', (req, res, next) => {
-        const demos = getDemoData();
+        const demoData = getDemoData();
 
         res.render('simulator.html', {
             version: version,
-            demos: demos
+            demos: demoData.demos,
+            defaultDemo: demoData.defaultDemo
         });
     });
 

@@ -57,7 +57,7 @@ int main() {
         <h3>Compilation failed</h3>
         <pre></pre>
       </div>
-      <iframe src="/view/blinky"></iframe>
+      <iframe src="/view/{{defaultDemo}}" data-default-demo="{{defaultDemo}}"></iframe>
     </section>
   </section>
 
@@ -106,6 +106,33 @@ int main() {
           }
       }
       window.currentBoard = currentBoard;
+
+      var iframeEl = document.querySelector('#viewer iframe');
+
+      // The demo the iframe shows when nothing else is selected: demos/simconfig.json's
+      // "default", rendered by the server into the iframe's data attribute.
+      // build-demos.js names the per-board previews after the same key, so the
+      // page and the artifacts cannot disagree about which demo has them.
+      // 'blinky' is only the fallback for a page that the server did not render.
+      window.defaultDemo = (iframeEl && iframeEl.getAttribute('data-default-demo')) || 'blinky';
+
+      // Which artifact shows demo `name` for the selected board.
+      //
+      // A non-default board is drawn from the per-board preview
+      // (out/<defaultDemo>-<board>.js): the viewer draws the board of the BINARY,
+      // so the default-built demo would be drawn on the default board with a
+      // "requested board ignored" warning and its onboard LED would stay dark.
+      // Demos without a preview are served as they are; the ?board= they carry is
+      // what makes the viewer report the ignored request instead of silently
+      // drawing the default board.
+      window.demoViewUrl = function(name) {
+          var board = window.currentBoard;
+          if (!board || board === 'default') {
+              return '/view/' + name;
+          }
+          var preview = name === window.defaultDemo ? '-' + board : '';
+          return '/view/' + name + preview + '?board=' + encodeURIComponent(board);
+      };
 
 
       // RFC 4648 §5 base64url, UTF-8 safe (native btoa/atob only, no external libs)
@@ -194,10 +221,8 @@ int main() {
           } else {
               window.currentBoard = 'default';
           }
-          var iframeEl = document.querySelector('#viewer iframe');
           if (iframeEl) {
-              var b = window.currentBoard;
-              iframeEl.src = '/view/blinky' + (b && b !== 'default' ? '?board=' + encodeURIComponent(b) : '');
+              iframeEl.src = window.demoViewUrl(window.defaultDemo);
           }
           editor.setValue(parsed.code);
           editor.selection.clearSelection();
@@ -209,14 +234,12 @@ int main() {
       }
 
       loadLab(document.location.hash);
-      var iframeEl = document.querySelector('#viewer iframe');
       window.addEventListener('hashchange', function() {
           loadLab(document.location.hash);
       });
 
       if (iframeEl) {
-          var b = window.currentBoard;
-          iframeEl.src = '/view/blinky' + (b && b !== 'default' ? '?board=' + encodeURIComponent(b) : '');
+          iframeEl.src = window.demoViewUrl(window.defaultDemo);
       }
 
 
