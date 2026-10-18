@@ -155,12 +155,11 @@ pc.printf("hello %d\n", 42);
 
 ```
 error: unknown type name 'Serial'
-error: unknown type name 'CONSOLE_TX'
 ```
 
 ```cpp
 // after
-UnbufferedSerial pc(P0_2, P0_3, 115200);
+UnbufferedSerial pc(USBTX, USBRX);
 pc.write("hello\n", 6);
 ```
 
@@ -176,13 +175,13 @@ Two things to know:
     Use `pc.write(buf, len)` for the serial port, or plain `printf()`, which
     still works and is routed to the simulator's serial monitor - that is what
     the lab exercises use.
-* The console pin **names** differ per board. Mbed CE's
-  `hal/PinNameAliases.h` does `#define USBTX CONSOLE_TX`, and the simulator's
-  default virtual board names its console pads `USBTX`/`USBRX`, so on the
-  default board `USBTX`/`USBRX` do not resolve in application code. Either use
-  `printf()`, use the raw pad names (`P0_2`/`P0_3` on the default board), or
-  build with `--board pico` / `--board nucleo`, whose profiles define
-  `CONSOLE_TX`/`CONSOLE_RX`.
+* `USBTX`/`USBRX` and `CONSOLE_TX`/`CONSOLE_RX` both work, on every virtual
+  board, and both name the same pad. Mbed CE's `hal/PinNameAliases.h` does
+  `#define USBTX CONSOLE_TX` (and the same for `USBRX`), and each board's pin
+  table declares `CONSOLE_TX`/`CONSOLE_RX` - the default board as `P0_2`/`P0_3`,
+  the same pads it has always had. So `UnbufferedSerial pc(USBTX, USBRX)` and
+  `UnbufferedSerial pc(CONSOLE_TX, CONSOLE_RX)` compile everywhere, and the raw
+  pad names (`P0_2`/`P0_3` on the default board) still work if you prefer them.
 
 ## 5. Event queues
 

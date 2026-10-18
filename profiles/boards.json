@@ -47,9 +47,9 @@
             "svgAsset": "viewer/img/controller_mbed.svg",
             "notes": [
                 "Selected by passing no --board / --board default, and that is the branch libmbed.a is compiled with, so this block must stay reachable with no TARGET_BOARD_* define at all.",
-                "Every name here is a name of the pre-T8 hand-written PinNames.h with the same integer value; that is verified by compiling a probe against both headers and diffing the printed values (T8 evidence log).",
-                "The Mbed CE MBED_LPC1768 target says LED1..LED4 = P1_18/P1_20/P1_21/P1_23 and CONSOLE_TX/CONSOLE_RX = P0_2/P0_3, which is exactly what this board emits as LED1..LED4 and USBTX/USBRX.",
-                "CONSOLE_TX/CONSOLE_RX are deliberately NOT enumerators here: Mbed CE's hal/include/hal/PinNameAliases.h does `#define USBTX CONSOLE_TX` unconditionally, and platform.h includes it, so a TU can see the header with that macro live. Today the macro renames the USBTX enumerator, which compiles; adding a second enumerator literally called CONSOLE_TX would make that a duplicate-enumerator error.",
+                "Every name here keeps the integer value it had in the pre-T8 hand-written PinNames.h; that is verified by compiling a probe against both headers and diffing the printed values (T8 evidence log). The one intended delta is that USBTX/USBRX are no longer enumerators - see the console note below.",
+                "The Mbed CE MBED_LPC1768 target says LED1..LED4 = P1_18/P1_20/P1_21/P1_23 and CONSOLE_TX/CONSOLE_RX = P0_2/P0_3, which is exactly what this board emits as LED1..LED4 and as CONSOLE_TX/CONSOLE_RX.",
+                "The console pads are named CONSOLE_TX/CONSOLE_RX, like Mbed CE's own MBED_LPC1768 target and like the pico/nucleo profiles. Mbed CE's hal/include/hal/PinNameAliases.h does `#define USBTX CONSOLE_TX` (and USBRX/CONSOLE_RX) unconditionally, so application code that writes USBTX/USBRX still compiles and still gets P0_2/P0_3 - but this header must not declare an enumerator called USBTX as well: hal/include/hal/static_pinmap.h includes the alias header BEFORE PinNames.h, and in that translation unit (hal/source/static_pinmap.cpp, in libmbed.a's closure) the macro would rewrite the USBTX enumerator onto CONSOLE_TX, a duplicate enumerator. Without CONSOLE_TX/CONSOLE_RX the application compile failed with `error: unknown type name 'CONSOLE_TX'` (note: expanded from macro 'USBTX').",
                 "The non-GPIO pads of the physical 40-pin DIP (p1..p4 and p31..p40, i.e. power and ground) are not modelled: the simulator's header has never named them and no demo or exercise references them.",
                 "The `#ifdef MCB1700` LED variant of the pre-T8 header is gone: MCB1700 is defined nowhere in this repository (grep: it appears only in that one #ifdef), so its branch was unreachable and LED1..LED4 keep the values of the branch that was always taken."
             ],
@@ -399,12 +399,12 @@
                     "label": "console (USB serial) names",
                     "pins": [
                         {
-                            "name": "USBTX",
+                            "name": "CONSOLE_TX",
                             "alias": "P0_2",
                             "role": "console"
                         },
                         {
-                            "name": "USBRX",
+                            "name": "CONSOLE_RX",
                             "alias": "P0_3",
                             "role": "console"
                         }

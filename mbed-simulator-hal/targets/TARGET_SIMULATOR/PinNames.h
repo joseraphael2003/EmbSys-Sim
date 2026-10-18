@@ -487,8 +487,8 @@ typedef enum {
     SW2 = BUTTON2,  // button - legacy alias of BUTTON2
 
     // console (USB serial) names
-    USBTX = P0_2,  // console
-    USBRX = P0_3,  // console
+    CONSOLE_TX = P0_2,  // console
+    CONSOLE_RX = P0_3,  // console
 
     // Arduino-header names of the Arch Pro variant
     D0 = P4_29,
