@@ -56,13 +56,14 @@
     Viewer configuration: the board drawing to use, the peripheral list and the
     board-notice state.
 
-    It is embedded as JSON, never as a JS string literal. hbs' `{{x}}` escapes
-    for HTML, and HTML escaping is not JS-string escaping: it does not touch
-    backslash, so a `\u003c` in a query parameter survived
-    `window.requestedBoard = "{{requestedBoard}}"` and the JS parser decoded it
-    back into markup. The value below is escaped for both contexts by the server
-    (jsonForScript in server/launch-server.js), which is why it is rendered with
-    the triple-stash: it is already encoded, and hbs must not re-encode it.
+    It is embedded as JSON, never as a JS string literal. hbs' HTML escaping is
+    not JS-string escaping: it does not touch backslash, so the old form - a
+    query value interpolated into an inline script as a JS string, e.g.
+    `window.requestedBoard = "<the requestedBoard value>"` - let a `\u003c`
+    through and the JS parser decoded it back into markup. The value below is
+    escaped for both contexts by the server (jsonForScript in
+    server/launch-server.js), which is why it is rendered with the triple-stash:
+    it is already encoded, and hbs must not re-encode it.
   -->
   <script id="viewer-config" type="application/json">{{{viewerConfig}}}</script>
   <script>
@@ -77,11 +78,9 @@
         config = {};
       }
 
-      window.viewerConfig = config;
       window.peripheralsToLoad = config.peripherals || [];
       window.activeBoard = config.board || null;
       window.boardName = config.boardName || null;
-      window.boardMcu = config.boardMcu || null;
       window.boardFallback = config.boardFallback === true;
       window.boardMismatch = config.boardMismatch === true;
       window.requestedBoard = config.requestedBoard || null;

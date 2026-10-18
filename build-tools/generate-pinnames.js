@@ -548,19 +548,19 @@ function renderHeader(loaded) {
 // ---------------------------------------------------------------------------
 
 // The board facts the viewer needs that are not pin values: what to call the
-// board, which drawing to load, and the parts soldered to it (SVG element id,
-// the pin that drives them, and the fill an LED lights up with). Emitted from
-// the same descriptors as the pin maps so the viewer has one source for both -
-// before this, board.js carried its own copy of `#led1..#led4`/`#button1`, the
-// per-board display names and the per-board LED colour.
+// board and the parts soldered to it (SVG element id, the pin that drives them,
+// and the fill an LED lights up with). Emitted from the same descriptors as the
+// pin maps so the viewer has one source for both - before this, board.js
+// carried its own copy of `#led1..#led4`/`#button1`, the per-board display names
+// and the per-board LED colour. The board drawing is deliberately not here: the
+// server picks it from the same descriptor and renders it into the page, so a
+// copy in the client would be a second source for it.
 function renderBoardMeta(loaded) {
     const meta = {};
 
     for (const board of loaded.boards) {
         meta[board.board.id] = {
             displayName: board.board.displayName,
-            mcu: board.board.mcu || null,
-            svgAsset: board.board.svgAsset || null,
             onboardPeripherals: (board.board.onboardPeripherals || []).map((peripheral) => ({
                 id: peripheral.id,
                 kind: peripheral.kind || null,
@@ -596,7 +596,7 @@ function renderJs(loaded) {
     L.push('// it will offer "boards" as a pin.');
     L.push('//');
     L.push('// MbedJSHal.BoardMeta (below) carries the non-pin board facts for the same');
-    L.push('// boards: display name, drawing, and the parts soldered to them.');
+    L.push('// boards: the display name and the parts soldered to them.');
     L.push('window.MbedJSHal = window.MbedJSHal || {};');
     L.push('');
     L.push('(function(boards) {');

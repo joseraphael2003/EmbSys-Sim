@@ -16,7 +16,7 @@
 // it will offer "boards" as a pin.
 //
 // MbedJSHal.BoardMeta (below) carries the non-pin board facts for the same
-// boards: display name, drawing, and the parts soldered to them.
+// boards: the display name and the parts soldered to them.
 window.MbedJSHal = window.MbedJSHal || {};
 
 (function(boards) {
@@ -215,8 +215,6 @@ window.MbedJSHal = window.MbedJSHal || {};
 window.MbedJSHal.BoardMeta = {
     "default": {
         "displayName": "mbed LPC1768 (simulator default)",
-        "mcu": "NXP LPC1768 (Arm Cortex-M3 @ 96 MHz)",
-        "svgAsset": "viewer/img/controller_mbed.svg",
         "onboardPeripherals": [
             {
                 "id": "led1",
@@ -278,8 +276,6 @@ window.MbedJSHal.BoardMeta = {
     },
     "pico": {
         "displayName": "Raspberry Pi Pico (RP2040)",
-        "mcu": "Raspberry Pi RP2040 (dual Arm Cortex-M0+ @ 133 MHz)",
-        "svgAsset": "viewer/img/controller_pico.svg",
         "onboardPeripherals": [
             {
                 "id": "led1",
@@ -333,8 +329,6 @@ window.MbedJSHal.BoardMeta = {
     },
     "nucleo": {
         "displayName": "ST Nucleo-F401RE",
-        "mcu": "ST STM32F401RET6 (Arm Cortex-M4F @ 84 MHz)",
-        "svgAsset": "viewer/img/controller_nucleo.svg",
         "onboardPeripherals": [
             {
                 "id": "led1",
