@@ -83,6 +83,16 @@ jobs:
         run: |
           docker run --rm mbed-simulator:ci bash -c "node cli.js -i demos/blinky -o out/blinky-pico.js --board pico && node cli.js -i demos/blinky -o out/blinky-pico.js --board pico --skip-build --launch-headless --scenario scenarios/pico-smoke.json && node cli.js -i demos/blinky -o out/blinky-nucleo.js --board nucleo && node cli.js -i demos/blinky -o out/blinky-nucleo.js --board nucleo --skip-build --launch-headless --scenario scenarios/nucleo-smoke.json"
 
+      # The viewer's board pipeline: the ?board= XSS PoCs, the parent page's
+      # board lookups, and the rule that the drawing follows the compiled
+      # binary. It needs the pico/nucleo artifacts (every `docker run` starts
+      # from the image, so the previous step's out/ is not there) and it starts
+      # its own server on port 7922, so it builds what it needs and runs in one
+      # self-contained container command.
+      - name: Board profile and ?board= XSS harness (viewer)
+        run: |
+          docker run --rm mbed-simulator:ci bash -c "node cli.js -i demos/blinky -o out/blinky-pico.js --board pico && node cli.js -i demos/blinky -o out/blinky-nucleo.js --board nucleo && node test/test-t9-boards.js"
+
       # No demo uses UnbufferedSerial, so nothing above would notice if the
       # symbol it needs (core_util_in_critical_section, defined in a
       # mbed-os/platform/source file the component manifest did not list) went
